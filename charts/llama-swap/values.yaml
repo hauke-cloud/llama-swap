@@ -1,0 +1,293 @@
+# Default values for llama-swap.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# -- Number of replicas. llama-swap starts and stops inference processes inside
+# its own pod, so every replica loads its own copy of a model and holds its own
+# GPU. Keep this at 1 unless each replica has a dedicated GPU and model volume.
+replicaCount: 1
+
+image:
+  # -- llama-swap image repository.
+  repository: ghcr.io/mostlygeek/llama-swap
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+  # Upstream publishes `v<version>-<backend>-<llama.cpp build>` tags plus a
+  # `-non-root` variant of each. The plain variants run as root; the
+  # `-non-root` ones as uid/gid 10001, which is what the securityContext below
+  # expects. Backends: cpu, cuda, cuda13, rocm, vulkan, intel, musa. For an
+  # NVIDIA node use e.g. `v243-cuda-b10133-non-root` and set gpu.enabled=true.
+  # An empty value falls back to the chart appVersion, which is not a valid tag
+  # on its own, so set this explicitly.
+  # -- Image tag, pinning the llama-swap release, the backend and the llama.cpp build.
+  tag: "v243-cpu-b10133-non-root"
+
+# -- Secrets for pulling images from a private registry.
+imagePullSecrets: []
+# -- Override the chart name portion of resource names.
+nameOverride: ""
+# -- Override the full generated resource name.
+fullnameOverride: ""
+
+llamaSwap:
+  # -- Port llama-swap listens on inside the container.
+  port: 8080
+  # The ConfigMap is mounted as a directory so kubelet propagates updates in
+  # place. With this enabled the chart drops the config checksum annotation, so
+  # the pod is not restarted when the config changes.
+  # -- Reload the configuration when the file changes (`--watch-config`).
+  watchConfig: false
+  # -- Directory the config file is mounted into.
+  configMountPath: /etc/llama-swap
+  # -- File name of the config within that directory.
+  configKey: config.yaml
+  # -- Use an existing ConfigMap holding the config file instead of rendering
+  # `llamaSwap.config`. It must contain a key matching `llamaSwap.configKey`.
+  existingConfigMap: ""
+  # -- Extra command line arguments for llama-swap.
+  extraArgs: []
+  # -- Override the container command. Empty uses the chart's own invocation of
+  # the `llama-swap` binary (the image entrypoint hardcodes /app/config.yaml).
+  command: []
+  # This is the upstream config format 1:1, see
+  # https://github.com/mostlygeek/llama-swap/blob/main/config.example.yaml
+  # The models below are an example: point `--model` at files that exist on the
+  # volume mounted at persistence.models.mountPath (/models by default).
+  # Secrets (e.g. `apiKeys`) are better referenced as `${env.NAME}` and injected
+  # through envFrom, so they stay out of the ConfigMap.
+  # -- llama-swap configuration, rendered into a ConfigMap as config.yaml.
+  config:
+    # Seconds to wait for an upstream server to become healthy after starting.
+    # Loading a large model from cold storage can easily exceed the default.
+    healthCheckTimeout: 500
+    logLevel: info
+    # First port handed out to upstream servers via the ${PORT} macro.
+    startPort: 10001
+    macros:
+      "llama-server": >
+        llama-server --host 127.0.0.1 --port ${PORT}
+    models:
+      "qwen3-0.6b":
+        cmd: |
+          ${llama-server}
+          --model /models/Qwen3-0.6B-Q4_K_M.gguf
+          --ctx-size 8192
+        # Unload the model after 300s idle.
+        ttl: 300
+        aliases:
+          - "gpt-3.5-turbo"
+
+# -- Environment variables for the container (list of name/value or
+# name/valueFrom). Referenced from the config as `${env.NAME}`.
+env: []
+# Example:
+#   - secretRef:
+#       name: llama-swap-apikeys
+# -- Additional envFrom sources, e.g. a Secret holding API keys.
+envFrom: []
+
+serviceAccount:
+  # -- Create a ServiceAccount for the pod.
+  create: true
+  # -- Automatically mount the ServiceAccount's API token.
+  automount: false
+  # -- Annotations to add to the ServiceAccount.
+  annotations: {}
+  # -- Name of the ServiceAccount. Generated if empty and create is true.
+  name: ""
+
+# -- Annotations to add to the pod.
+podAnnotations: {}
+# -- Labels to add to the pod.
+podLabels: {}
+
+# -- Pod-level security context. fsGroup makes the mounted volumes writable by
+# the unprivileged user of the `-non-root` images.
+podSecurityContext:
+  fsGroup: 10001
+  fsGroupChangePolicy: OnRootMismatch
+
+# Matches the uid/gid of the `-non-root` image variants; drop the runAs* keys
+# when using a plain (root) tag. readOnlyRootFilesystem stays off because
+# llama.cpp backends write compiler and kernel caches below $HOME (/app).
+# -- Container-level security context.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+gpu:
+  # -- Request a GPU for the pod. Requires a matching device plugin and a GPU
+  # image variant (see image.tag).
+  enabled: false
+  # -- Extended resource name, e.g. nvidia.com/gpu, amd.com/gpu,
+  # gpu.intel.com/i915.
+  resourceName: nvidia.com/gpu
+  # -- Number of devices to request. Added to resources.limits.
+  count: 1
+
+# -- RuntimeClass for the pod, e.g. "nvidia" on clusters that need it.
+runtimeClassName: ""
+
+service:
+  # -- Service type.
+  type: ClusterIP
+  # -- Service port.
+  port: 8080
+  # -- Annotations to add to the Service.
+  annotations: {}
+
+ingress:
+  # -- Expose llama-swap through an Ingress.
+  enabled: false
+  # -- IngressClass name.
+  className: ""
+  # Token streaming and cold model loads hold connections open for a long time,
+  # so raise the proxy timeouts, e.g. for ingress-nginx:
+  #   nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+  #   nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  #   nginx.ingress.kubernetes.io/proxy-body-size: "0"
+  # -- Annotations for the Ingress.
+  annotations: {}
+  # -- Ingress host rules.
+  hosts:
+    - host: llama-swap.local
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- TLS configuration.
+  tls: []
+
+persistence:
+  models:
+    # -- Mount a volume holding the model files. Without it the container has
+    # nowhere to read GGUFs from.
+    enabled: true
+    # -- Where the models volume is mounted.
+    mountPath: /models
+    # -- Mount the models read-only.
+    readOnly: false
+    # -- Use an existing (usually prepopulated) PVC instead of provisioning a
+    # new, empty one. Mutually exclusive with hostPath.
+    existingClaim: ""
+    # For single-node setups where the models already sit on the GPU node's
+    # disk. Requires a nodeSelector pinning the pod to that node.
+    # -- Use a host directory instead of a PVC. Mutually exclusive with existingClaim.
+    hostPath: ""
+    # -- StorageClass. Empty uses the cluster default; "-" disables dynamic
+    # provisioning.
+    storageClass: ""
+    # -- Access modes. ReadWriteMany lets other pods top the volume up while
+    # llama-swap runs, if the backend supports it.
+    accessModes:
+      - ReadWriteOnce
+    # -- Volume size. Model weights are large; size for what you plan to host.
+    size: 100Gi
+    # -- Annotations for the PVC.
+    annotations: {}
+    # -- Keep the PVC when the release is uninstalled.
+    retain: true
+  data:
+    # Only useful together with a `store` entry in the config pointing into
+    # mountPath; without it llama-swap keeps its state in memory.
+    # -- Persist llama-swap's state database (activity log and metrics history).
+    enabled: false
+    # -- Where the state volume is mounted.
+    mountPath: /data
+    # -- Use an existing PVC instead of provisioning one.
+    existingClaim: ""
+    # -- StorageClass. Empty uses the cluster default; "-" disables dynamic
+    # provisioning.
+    storageClass: ""
+    # -- Access modes.
+    accessModes:
+      - ReadWriteOnce
+    # -- Volume size.
+    size: 1Gi
+    # -- Annotations for the PVC.
+    annotations: {}
+    # -- Keep the PVC when the release is uninstalled.
+    retain: true
+
+shm:
+  # Some backends move tensors between GPUs through shared memory and fail with
+  # the 64Mi the container runtime provides by default.
+  # -- Replace the default 64Mi /dev/shm with a larger tmpfs.
+  enabled: false
+  # -- Size of the /dev/shm tmpfs. Counts against the container's memory limit.
+  sizeLimit: 1Gi
+
+# -- Size limit of the emptyDir mounted at /tmp.
+tmpSizeLimit: 1Gi
+
+# Inference is memory hungry: a model needs roughly its file size in RAM (or
+# VRAM) plus the KV cache. GPU devices are added by the `gpu` block above.
+# -- Resource requests and limits.
+resources: {}
+  # limits:
+  #   cpu: "8"
+  #   memory: 16Gi
+  # requests:
+  #   cpu: "2"
+  #   memory: 8Gi
+
+# /health is served by the proxy itself and is exempt from API key checks, so
+# it stays green while models are loading or swapping.
+# -- Liveness probe.
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# -- Readiness probe.
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Generous by default: with `hooks.on_startup.preload` in the config, the proxy
+# answers only once the preloaded models are up.
+# -- Startup probe.
+startupProbe:
+  httpGet:
+    path: /health
+    port: http
+  periodSeconds: 5
+  timeoutSeconds: 5
+  failureThreshold: 60
+
+# -- Additional volumes on the pod.
+extraVolumes: []
+# -- Additional volumeMounts on the container.
+extraVolumeMounts: []
+
+# -- Node selector for pod scheduling.
+nodeSelector: {}
+# -- Tolerations for pod scheduling. GPU nodes are commonly tainted.
+tolerations: []
+# -- Affinity rules for pod scheduling.
+affinity: {}
+# -- Topology spread constraints.
+topologySpreadConstraints: []
+# llama-swap forwards the signal to the upstream servers it started and waits
+# for in-flight requests to finish.
+# -- Grace period on shutdown.
+terminationGracePeriodSeconds: 120
+# Recreate is the default because a ReadWriteOnce models volume and a GPU
+# cannot be shared with a second pod during a rollout.
+# -- Deployment update strategy.
+strategy:
+  type: Recreate

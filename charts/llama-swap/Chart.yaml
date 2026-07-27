@@ -1,0 +1,22 @@
+apiVersion: v2
+name: llama-swap
+description: A Helm chart for llama-swap, an OpenAI-compatible proxy that loads and hot-swaps llama.cpp (and other inference) servers on demand.
+type: application
+# version is managed by CI (svu). This is only a sensible default for local packaging.
+version: 0.1.0
+# appVersion tracks the llama-swap release. The default container tag also pins
+# a backend and a llama.cpp build, see values.yaml image.tag.
+appVersion: "v243"
+home: https://github.com/mostlygeek/llama-swap
+sources:
+  - https://github.com/mostlygeek/llama-swap
+  - https://github.com/hauke-cloud/llama-swap
+keywords:
+  - llama-swap
+  - llama.cpp
+  - llm
+  - inference
+  - openai
+maintainers:
+  - name: Hauke Mettendorf
+    email: hauke@mettendorf.it

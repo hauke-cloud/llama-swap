@@ -1,0 +1,61 @@
+{{- if and .Values.persistence.models.enabled (not .Values.persistence.models.existingClaim) (not .Values.persistence.models.hostPath) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "llama-swap.modelsClaimName" . }}
+  labels:
+    {{- include "llama-swap.labels" . | nindent 4 }}
+  {{- if or .Values.persistence.models.retain .Values.persistence.models.annotations }}
+  annotations:
+    {{- if .Values.persistence.models.retain }}
+    helm.sh/resource-policy: keep
+    {{- end }}
+    {{- with .Values.persistence.models.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.models.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.models.size | quote }}
+  {{- if .Values.persistence.models.storageClass }}
+  {{- if eq "-" .Values.persistence.models.storageClass }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.persistence.models.storageClass | quote }}
+  {{- end }}
+  {{- end }}
+{{- end }}
+{{- if and .Values.persistence.data.enabled (not .Values.persistence.data.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "llama-swap.dataClaimName" . }}
+  labels:
+    {{- include "llama-swap.labels" . | nindent 4 }}
+  {{- if or .Values.persistence.data.retain .Values.persistence.data.annotations }}
+  annotations:
+    {{- if .Values.persistence.data.retain }}
+    helm.sh/resource-policy: keep
+    {{- end }}
+    {{- with .Values.persistence.data.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.data.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.data.size | quote }}
+  {{- if .Values.persistence.data.storageClass }}
+  {{- if eq "-" .Values.persistence.data.storageClass }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.persistence.data.storageClass | quote }}
+  {{- end }}
+  {{- end }}
+{{- end }}

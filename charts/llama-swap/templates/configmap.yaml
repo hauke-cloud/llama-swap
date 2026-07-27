@@ -1,0 +1,11 @@
+{{- if not .Values.llamaSwap.existingConfigMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "llama-swap.configMapName" . }}
+  labels:
+    {{- include "llama-swap.labels" . | nindent 4 }}
+data:
+  {{ .Values.llamaSwap.configKey }}: |
+    {{- toYaml .Values.llamaSwap.config | nindent 4 }}
+{{- end }}

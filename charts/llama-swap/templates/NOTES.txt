@@ -1,0 +1,49 @@
+llama-swap has been deployed as {{ include "llama-swap.fullname" . }}.
+
+Configured models:
+{{- range $name, $model := .Values.llamaSwap.config.models }}
+  - {{ $name }}
+{{- else }}
+  (none — llamaSwap.config.models is empty)
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+
+Reachable via ingress at:
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else }}
+
+The service is not exposed outside the cluster. Inside the cluster, point
+OpenAI-compatible clients at:
+
+  http://{{ include "llama-swap.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}/v1
+
+To try it from your machine:
+
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "llama-swap.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  curl http://localhost:{{ .Values.service.port }}/v1/models
+{{- end }}
+
+The web UI is at /ui, currently loaded models at /running, and Prometheus
+metrics at /metrics.
+
+{{- if and .Values.persistence.models.enabled (not .Values.persistence.models.existingClaim) (not .Values.persistence.models.hostPath) }}
+
+NOTE: an empty {{ .Values.persistence.models.size }} volume was provisioned as
+{{ include "llama-swap.modelsClaimName" . }} and mounted at {{ .Values.persistence.models.mountPath }}.
+Models will not load until the GGUF files referenced by the `cmd` entries in
+your config exist there. Copy them in with, for example:
+
+  kubectl --namespace {{ .Release.Namespace }} cp ./model.gguf \
+    $(kubectl --namespace {{ .Release.Namespace }} get pod -l app.kubernetes.io/instance={{ .Release.Name }} -o name | head -1 | cut -d/ -f2):{{ .Values.persistence.models.mountPath }}/model.gguf
+{{- end }}
+{{- if not .Values.gpu.enabled }}
+
+NOTE: no GPU was requested (gpu.enabled=false) and the default image tag is a
+CPU build. For GPU inference set gpu.enabled=true and pick a matching image,
+e.g. image.tag=v243-cuda-b10133-non-root.
+{{- end }}

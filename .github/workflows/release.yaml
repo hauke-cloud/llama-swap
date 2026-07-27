@@ -1,0 +1,97 @@
+name: Release Helm Chart
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  CHART_DIR: charts/${{ github.event.repository.name }}
+  OCI_REGISTRY: ghcr.io
+  OCI_NAMESPACE: ${{ github.repository_owner }}/charts
+  CHART_NAME: ${{ github.event.repository.name }}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.next }}
+      changed: ${{ steps.version.outputs.changed }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: github-action-svu
+        uses: charlesthomas/github-action-svu@v1.1.3+3.2.3
+        id: version
+        with:
+          pushTag: true
+          verbose: true
+          cmd: next
+
+  release:
+    runs-on: ubuntu-latest
+    needs: version
+    if: needs.version.outputs.changed
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install yq
+        uses: mikefarah/yq@v4
+
+      - name: Helm dependencies
+        working-directory: ${{ env.CHART_DIR }}
+        run: |
+          if [ -f Chart.yaml ] && yq '.dependencies' Chart.yaml >/dev/null 2>&1; then
+            helm dependency build
+          fi
+
+      - name: Align Chart.yaml version (in-memory)
+        run: |
+          VER="${{ needs.version.outputs.version }}"
+          yq -i ".version = \"${VER}\"" "${CHART_DIR}/Chart.yaml"
+          echo "Chart.yaml set to version ${VER}"
+
+      - name: Package chart
+        run: |
+          VER="${{ needs.version.outputs.version }}"
+          helm package "${CHART_DIR}" --version "${VER}"
+          ls -l "${{ env.CHART_NAME }}-${VER}.tgz"
+
+      - name: Login to OCI registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login "${{ env.OCI_REGISTRY }}" \
+            --username "${{ github.actor }}" --password-stdin
+
+      - name: Push chart to OCI
+        run: |
+          VER="${{ needs.version.outputs.version }}"
+          helm push "${{ env.CHART_NAME }}-${VER}.tgz" "oci://${{ env.OCI_REGISTRY }}/${{ env.OCI_NAMESPACE }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.version }}
+          name: ${{ env.CHART_NAME }} ${{ needs.version.outputs.version }}
+          body: |
+            Helm chart `${{ env.CHART_NAME }}` released as `${{ needs.version.outputs.version }}`.
+            OCI: `oci://${{ env.OCI_REGISTRY }}/${{ env.OCI_NAMESPACE }}/${{ env.CHART_NAME }}:${{ needs.version.outputs.version }}`
+          files: |
+            ${{ env.CHART_NAME }}-${{ needs.version.outputs.version }}.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
