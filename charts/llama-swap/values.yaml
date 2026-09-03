@@ -7,6 +7,9 @@
 # GPU. Keep this at 1 unless each replica has a dedicated GPU and model volume.
 replicaCount: 1
 
+# repository and tag are ignored when comfyui.enabled is set: the ComfyUI
+# feature is a different image, with its own coordinates under `comfyui.image`.
+# pullPolicy applies either way.
 image:
   # -- llama-swap image repository.
   repository: ghcr.io/mostlygeek/llama-swap
@@ -76,6 +79,69 @@ llamaSwap:
         ttl: 300
         aliases:
           - "gpt-3.5-turbo"
+
+# ComfyUI, from the combined image at
+# https://github.com/hauke-cloud/llama-swap-comfyui. ComfyUI is installed next
+# to llama-swap and registered as a swappable model, so it shares llama-swap's
+# default exclusive group with every llama.cpp model: starting ComfyUI unloads
+# the resident LLM and vice versa — one GPU, one workload at a time. It is
+# reached through llama-swap's own port at /upstream/<comfyui.name>/ and needs
+# no Service or Ingress of its own.
+comfyui:
+  # -- Run the llama-swap + ComfyUI image and register ComfyUI as a model.
+  # Replaces `image` with `comfyui.image` and mounts the ComfyUI data volume.
+  enabled: false
+  # Tag names mirror upstream's `v<version>-<backend>-b<build>[-non-root]`
+  # scheme, plus the floating `cuda`, `cuda13` and `-non-root` variants. Only
+  # CUDA backends are built, because ComfyUI needs a PyTorch accelerator. Old
+  # tags are pruned upstream (the 40 most recent are kept), which is why the
+  # default is a floating tag rather than a pinned build; pin one for
+  # reproducible rollouts and update it deliberately.
+  image:
+    # -- ComfyUI image repository.
+    repository: ghcr.io/hauke-cloud/llama-swap-comfyui
+    # -- ComfyUI image tag. `-non-root` matches the uid/gid the securityContext expects.
+    tag: "cuda-non-root"
+  # Set to false when you bring the `comfyui` entry yourself, either through
+  # `llamaSwap.existingConfigMap` or by writing it into `llamaSwap.config`. An
+  # entry that already exists under `comfyui.name` is never overwritten.
+  # -- Add the ComfyUI model entry to the rendered config.
+  injectModel: true
+  # -- Key of the model entry, and therefore the proxy path: /upstream/<name>/.
+  name: comfyui
+  # -- Display name in the llama-swap UI.
+  displayName: ComfyUI
+  # -- Description in the llama-swap UI.
+  description: "ComfyUI web UI and API, proxied at /upstream/comfyui/"
+  # ComfyUI is not OpenAI-compatible, so listing it only hands chat clients a
+  # model that 404s. Set to false to see it in the UI's model list.
+  # -- Hide ComfyUI from /v1/models.
+  unlisted: true
+  # -- Seconds of inactivity after which ComfyUI is stopped and the GPU freed.
+  ttl: 900
+  # Models not assigned to a group land in llama-swap's default group, which is
+  # exclusive — so with no `groups` in the config, loading ComfyUI unloads the
+  # resident LLM and vice versa, which is the point of running it here. As soon
+  # as the config defines its own groups, that no longer holds: ComfyUI stays in
+  # the default group and would run beside a group member, both claiming the
+  # same GPU. Name the group holding the llama.cpp models here and ComfyUI is
+  # added to its members.
+  # -- Group to add ComfyUI to. Empty leaves it in the default group.
+  group: ""
+  # -- Where ComfyUI is installed in the image. Holds `app/` and the `venv/`
+  # that torch lives in.
+  home: /opt/comfyui
+  # Importing torch and starting the model manager on a cold cache takes a
+  # while; llama-swap gives up after `llamaSwap.config.healthCheckTimeout`
+  # seconds, so keep that generous when ComfyUI is enabled.
+  # -- Endpoint llama-swap polls to decide ComfyUI is up. ComfyUI does not
+  # serve llama.cpp's /health.
+  checkEndpoint: /system_stats
+  # -- Extra command line arguments for ComfyUI, e.g. ["--fast", "--preview-method", "auto"].
+  extraArgs: []
+  # -- Override the ComfyUI command entirely. Empty builds it from the values
+  # above. Multi-line string, passed to llama-swap as the model's `cmd`.
+  cmd: ""
 
 # -- Environment variables for the container (list of name/value or
 # name/valueFrom). Referenced from the config as `${env.NAME}`.
@@ -211,6 +277,33 @@ persistence:
       - ReadWriteOnce
     # -- Volume size.
     size: 1Gi
+    # -- Annotations for the PVC.
+    annotations: {}
+    # -- Keep the PVC when the release is uninstalled.
+    retain: true
+
+  comfyui:
+    # Only used when comfyui.enabled is set. ComfyUI is passed this path as
+    # `--base-directory`, so checkpoints, custom nodes, inputs, outputs and its
+    # user settings all live under it. Without the volume they are lost with
+    # the container.
+    # -- Mount a volume holding ComfyUI's models and state.
+    enabled: true
+    # -- Where the ComfyUI data volume is mounted. Matches the image default.
+    mountPath: /data/comfyui
+    # -- Use an existing PVC instead of provisioning one.
+    existingClaim: ""
+    # -- Use a host directory instead of a PVC. Mutually exclusive with existingClaim.
+    hostPath: ""
+    # -- StorageClass. Empty uses the cluster default; "-" disables dynamic
+    # provisioning.
+    storageClass: ""
+    # -- Access modes.
+    accessModes:
+      - ReadWriteOnce
+    # -- Volume size. Diffusion checkpoints are large; size for what you plan
+    # to install.
+    size: 50Gi
     # -- Annotations for the PVC.
     annotations: {}
     # -- Keep the PVC when the release is uninstalled.

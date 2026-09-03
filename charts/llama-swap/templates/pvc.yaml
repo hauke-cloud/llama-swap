@@ -59,3 +59,34 @@ spec:
   {{- end }}
   {{- end }}
 {{- end }}
+{{- if and .Values.comfyui.enabled .Values.persistence.comfyui.enabled (not .Values.persistence.comfyui.existingClaim) (not .Values.persistence.comfyui.hostPath) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "llama-swap.comfyuiClaimName" . }}
+  labels:
+    {{- include "llama-swap.labels" . | nindent 4 }}
+  {{- if or .Values.persistence.comfyui.retain .Values.persistence.comfyui.annotations }}
+  annotations:
+    {{- if .Values.persistence.comfyui.retain }}
+    helm.sh/resource-policy: keep
+    {{- end }}
+    {{- with .Values.persistence.comfyui.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.comfyui.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.comfyui.size | quote }}
+  {{- if .Values.persistence.comfyui.storageClass }}
+  {{- if eq "-" .Values.persistence.comfyui.storageClass }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.persistence.comfyui.storageClass | quote }}
+  {{- end }}
+  {{- end }}
+{{- end }}

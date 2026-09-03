@@ -1,7 +1,7 @@
 llama-swap has been deployed as {{ include "llama-swap.fullname" . }}.
 
 Configured models:
-{{- range $name, $model := .Values.llamaSwap.config.models }}
+{{- range $name, $model := (include "llama-swap.config" . | fromYaml).models }}
   - {{ $name }}
 {{- else }}
   (none — llamaSwap.config.models is empty)
@@ -30,6 +30,36 @@ To try it from your machine:
 
 The web UI is at /ui, currently loaded models at /running, and Prometheus
 metrics at /metrics.
+{{- if .Values.comfyui.enabled }}
+
+ComfyUI is served through the same port, at /upstream/{{ .Values.comfyui.name }}/ — no
+separate Service or Ingress. Opening that path starts it, exactly like an
+inference request starts an LLM; it stops again after {{ .Values.comfyui.ttl }}s idle.
+{{- if not .Values.comfyui.group }}
+It shares llama-swap's default exclusive group, so starting ComfyUI unloads the
+resident LLM and vice versa.
+{{- if (include "llama-swap.config" . | fromYaml).groups }}
+
+WARNING: the config defines its own `groups`, but comfyui.group is unset. Models
+in a named group do not swap against the default group, so ComfyUI can run
+beside one of them and both will claim the same GPU. Set comfyui.group to the
+group holding your llama.cpp models.
+{{- end }}
+{{- else }}
+It is a member of the `{{ .Values.comfyui.group }}` group, so it swaps against the models
+in it.
+{{- end }}
+{{- if and .Values.persistence.comfyui.enabled (not .Values.persistence.comfyui.existingClaim) (not .Values.persistence.comfyui.hostPath) }}
+
+An empty {{ .Values.persistence.comfyui.size }} volume was provisioned as {{ include "llama-swap.comfyuiClaimName" . }}
+and mounted at {{ .Values.persistence.comfyui.mountPath }}. ComfyUI creates its directory layout
+there on first start; checkpoints, custom nodes and outputs all live on it.
+{{- else if not .Values.persistence.comfyui.enabled }}
+
+WARNING: persistence.comfyui.enabled=false — ComfyUI's models, custom nodes and
+outputs are written into the container and lost when the pod restarts.
+{{- end }}
+{{- end }}
 
 {{- if and .Values.persistence.models.enabled (not .Values.persistence.models.existingClaim) (not .Values.persistence.models.hostPath) }}
 
@@ -43,7 +73,12 @@ your config exist there. Copy them in with, for example:
 {{- end }}
 {{- if not .Values.gpu.enabled }}
 
-NOTE: no GPU was requested (gpu.enabled=false) and the default image tag is a
+NOTE: no GPU was requested (gpu.enabled=false)
+{{- if .Values.comfyui.enabled }}, and the ComfyUI images are
+CUDA builds. Set gpu.enabled=true, or ComfyUI will fall back to the CPU and
+generate at a small fraction of the speed.
+{{- else }} and the default image tag is a
 CPU build. For GPU inference set gpu.enabled=true and pick a matching image,
 e.g. image.tag=v243-cuda-b10133-non-root.
+{{- end }}
 {{- end }}

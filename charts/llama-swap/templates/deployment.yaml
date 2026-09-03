@@ -47,7 +47,7 @@ spec:
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: {{ include "llama-swap.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- with .Values.securityContext }}
           securityContext:
@@ -115,6 +115,10 @@ spec:
             - name: data
               mountPath: {{ .Values.persistence.data.mountPath }}
             {{- end }}
+            {{- if include "llama-swap.comfyuiVolumeEnabled" . }}
+            - name: comfyui
+              mountPath: {{ .Values.persistence.comfyui.mountPath }}
+            {{- end }}
             {{- if .Values.shm.enabled }}
             - name: dshm
               mountPath: /dev/shm
@@ -144,6 +148,17 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: {{ include "llama-swap.dataClaimName" . }}
+        {{- end }}
+        {{- if include "llama-swap.comfyuiVolumeEnabled" . }}
+        - name: comfyui
+          {{- if .Values.persistence.comfyui.hostPath }}
+          hostPath:
+            path: {{ .Values.persistence.comfyui.hostPath }}
+            type: Directory
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ include "llama-swap.comfyuiClaimName" . }}
+          {{- end }}
         {{- end }}
         {{- if .Values.shm.enabled }}
         - name: dshm

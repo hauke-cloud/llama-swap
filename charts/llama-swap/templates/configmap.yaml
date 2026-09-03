@@ -7,5 +7,5 @@ metadata:
     {{- include "llama-swap.labels" . | nindent 4 }}
 data:
   {{ .Values.llamaSwap.configKey }}: |
-    {{- toYaml .Values.llamaSwap.config | nindent 4 }}
+    {{- include "llama-swap.config" . | nindent 4 }}
 {{- end }}

@@ -81,6 +81,78 @@ Upstream publishes `cuda`, `cuda13`, `rocm`, `vulkan`, `intel` and `musa` builds
 shared memory usually also want `shm.enabled=true`, because the container default of
 64Mi for `/dev/shm` is too small.
 
+## ComfyUI
+
+`comfyui.enabled` switches the deployment to
+[hauke-cloud/llama-swap-comfyui](https://github.com/hauke-cloud/llama-swap-comfyui) —
+the upstream CUDA images with ComfyUI installed alongside llama-swap — and registers
+ComfyUI as a swappable model:
+
+```yaml
+comfyui:
+  enabled: true
+gpu:
+  enabled: true
+```
+
+ComfyUI is then reached through llama-swap's own port at `/upstream/comfyui/`, so it
+needs no Service, Ingress or second port of its own. Opening that path starts it the
+same way an inference request starts an LLM, and it stops again after `comfyui.ttl`
+seconds idle. That is the entire point of running it here rather than beside
+llama-swap: **one GPU, one workload at a time** — loading ComfyUI unloads the resident
+LLM and vice versa.
+
+`comfyui.image` replaces `image` when the feature is on; the two repositories have
+different tags. Only CUDA backends are published, because ComfyUI needs a PyTorch
+accelerator. The default `cuda-non-root` is a floating tag (CUDA 12.8, torch `cu128`) —
+upstream prunes old tags, so pinning a build in chart defaults would rot. Pin one
+yourself for reproducible rollouts. Blackwell cards (sm_120) need the `cuda13` line.
+
+### Groups
+
+Models that are not in a group belong to llama-swap's default group, which is
+exclusive — so with no `groups` in the config, the swapping above happens on its own.
+As soon as the config defines its own groups, it stops: ComfyUI stays in the default
+group and will happily run beside a group member, both claiming the same GPU. Name the
+group and the chart adds ComfyUI to its members:
+
+```yaml
+comfyui:
+  enabled: true
+  group: gpu
+llamaSwap:
+  config:
+    groups:
+      gpu:
+        swap: true
+        exclusive: true
+        members:
+          - qwen3-coder
+          - gpt-oss
+```
+
+### Storage
+
+`/data/comfyui` is passed to ComfyUI as `--base-directory`, so checkpoints, LoRAs,
+custom nodes, inputs, outputs and user settings all sit on the one volume that
+`persistence.comfyui` provisions (50Gi by default, `helm.sh/resource-policy: keep`).
+Point it at an existing claim or a host path the same way as the models volume. Custom
+nodes must be installed into it rather than baked into the image, or an image update
+loses them.
+
+The volume has to be writable by the container user. The chart's default `fsGroup:
+10001` handles that; if you clear `podSecurityContext` — a reasonable thing to do when
+the models volume is large enough that a recursive chown on every start hurts — make
+sure the ComfyUI volume is writable by uid 10001 some other way.
+
+### Config
+
+The `comfyui` model entry is generated from the `comfyui.*` values and merged into
+`llamaSwap.config`. An entry you write yourself under `comfyui.name` is never
+overwritten, `comfyui.extraArgs` appends flags, and `comfyui.cmd` replaces the command
+outright. With `llamaSwap.existingConfigMap` there is nothing to merge into: set
+`comfyui.injectModel=false` and carry the entry in your own ConfigMap.
+
 ## Configuration
 
 `llamaSwap.config` is the [upstream config

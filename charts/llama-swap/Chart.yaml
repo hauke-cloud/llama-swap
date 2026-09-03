@@ -11,12 +11,15 @@ home: https://github.com/mostlygeek/llama-swap
 sources:
   - https://github.com/mostlygeek/llama-swap
   - https://github.com/hauke-cloud/llama-swap
+  - https://github.com/hauke-cloud/llama-swap-comfyui
 keywords:
   - llama-swap
   - llama.cpp
   - llm
   - inference
   - openai
+  - comfyui
+  - image-generation
 maintainers:
   - name: Hauke Mettendorf
     email: hauke@mettendorf.it
