@@ -95,12 +95,21 @@ gpu:
   enabled: true
 ```
 
-ComfyUI is then reached through llama-swap's own port at `/upstream/comfyui/`, so it
-needs no Service, Ingress or second port of its own. Opening that path starts it the
-same way an inference request starts an LLM, and it stops again after `comfyui.ttl`
-seconds idle. That is the entire point of running it here rather than beside
-llama-swap: **one GPU, one workload at a time** — loading ComfyUI unloads the resident
-LLM and vice versa.
+ComfyUI is then reached through llama-swap's own port at `/comfyui/`, so it needs no
+Service or second port of its own. Opening that path starts it the same way an
+inference request starts an LLM, and it stops again after `comfyui.ttl` seconds idle.
+That is the entire point of running it here rather than beside llama-swap: **one GPU,
+one workload at a time** — loading ComfyUI unloads the resident LLM and vice versa.
+
+That short path is not a generic proxy route. llama-swap v249 added first-class
+handling for one exact model id, `comfyui_auto`, which is what `comfyui.name` defaults
+to: it is served at `/comfyui/`, its concurrency limit is raised to 50, and websockets
+stop counting towards model lifecycle. The last one is the important one — ComfyUI
+holds a progress websocket open for as long as a browser tab is, and without it that
+idle tab reads as activity, so the TTL never fires and the LLM never gets its GPU back.
+Rename the model and the chart falls back to `/upstream/<name>/`, setting
+`concurrencyLimit` and `compat.ignoreWebsockets` on the entry by hand so the behaviour
+survives the rename.
 
 `comfyui.image` replaces `image` when the feature is on; the two repositories have
 different tags. Only CUDA backends are published, because ComfyUI needs a PyTorch
@@ -131,6 +140,52 @@ llamaSwap:
           - gpt-oss
 ```
 
+### Its own hostname
+
+`comfyui.ingress` adds a second Ingress, pointing at the same Service, that serves
+ComfyUI from the root of a hostname of its own:
+
+```yaml
+comfyui:
+  enabled: true
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    hosts:
+      - host: comfy.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - hosts: [comfy.example.com]
+        secretName: comfy-tls
+```
+
+The backend still serves ComfyUI under a prefix, so the Ingress has to put it back on:
+`comfyui.ingress.rewrite` (on by default) emits ingress-nginx's `rewrite-target` and
+`use-regex` annotations and turns each path into the regex they need — `/` becomes
+`/()(.*)`, `/comfy` becomes `/comfy(/|$)(.*)`, and both feed the same `$2` target, so
+one Ingress can carry several paths. `pathType` is `ImplementationSpecific` in that
+mode. ComfyUI derives its API base from the page URL, so the UI, `/api` and the
+websocket all follow the rewrite without further configuration.
+
+On another controller set `rewrite: false` and either point `path` at `/comfyui`
+directly, or do the rewrite in your own way — a Traefik middleware, a Gateway API
+`URLRewrite` filter — through `annotations`. Leaving `rewrite: false` with `path: /`
+publishes all of llama-swap on that hostname, API and UI included; `helm install`
+prints a warning when it detects that.
+
+Both Ingresses front the same process, so `apiKeys` guards this hostname too:
+`/comfyui/` runs through the same auth middleware as `/v1`. llama-swap answers a
+missing key with `WWW-Authenticate: Basic`, so a browser prompts and any username with
+the API key as the password gets in. Without `apiKeys`, anyone who can reach the host
+can queue work on your GPU.
+
 ### Storage
 
 `/data/comfyui` is passed to ComfyUI as `--base-directory`, so checkpoints, LoRAs,
@@ -147,7 +202,7 @@ sure the ComfyUI volume is writable by uid 10001 some other way.
 
 ### Config
 
-The `comfyui` model entry is generated from the `comfyui.*` values and merged into
+The ComfyUI model entry is generated from the `comfyui.*` values and merged into
 `llamaSwap.config`. An entry you write yourself under `comfyui.name` is never
 overwritten, `comfyui.extraArgs` appends flags, and `comfyui.cmd` replaces the command
 outright. With `llamaSwap.existingConfigMap` there is nothing to merge into: set
@@ -244,16 +299,24 @@ something large from slow storage.
 | affinity | object | `{}` | Affinity rules for pod scheduling. |
 | comfyui.checkEndpoint | string | `"/system_stats"` | Endpoint llama-swap polls to decide ComfyUI is up. ComfyUI does not serve llama.cpp's /health. |
 | comfyui.cmd | string | `""` | Override the ComfyUI command entirely. Empty builds it from the values above. Multi-line string, passed to llama-swap as the model's `cmd`. |
-| comfyui.description | string | `"ComfyUI web UI and API, proxied at /upstream/comfyui/"` | Description in the llama-swap UI. |
+| comfyui.concurrencyLimit | int | `50` | Concurrent requests allowed to ComfyUI. |
+| comfyui.description | string | `"ComfyUI web UI and API"` | Description in the llama-swap UI. |
 | comfyui.displayName | string | `"ComfyUI"` | Display name in the llama-swap UI. |
 | comfyui.enabled | bool | `false` | Run the llama-swap + ComfyUI image and register ComfyUI as a model. Replaces `image` with `comfyui.image` and mounts the ComfyUI data volume. |
 | comfyui.extraArgs | list | `[]` | Extra command line arguments for ComfyUI, e.g. ["--fast", "--preview-method", "auto"]. |
 | comfyui.group | string | `""` | Group to add ComfyUI to. Empty leaves it in the default group. |
 | comfyui.home | string | `"/opt/comfyui"` | Where ComfyUI is installed in the image. Holds `app/` and the `venv/` that torch lives in. |
+| comfyui.ignoreWebsockets | bool | `true` | Keep websockets out of swap, concurrency and TTL accounting, so an open browser tab does not pin ComfyUI to the GPU forever. |
 | comfyui.image.repository | string | `"ghcr.io/hauke-cloud/llama-swap-comfyui"` | ComfyUI image repository. |
 | comfyui.image.tag | string | `"cuda-non-root"` | ComfyUI image tag. `-non-root` matches the uid/gid the securityContext expects. |
+| comfyui.ingress.annotations | object | `{}` | Annotations for the ComfyUI Ingress. |
+| comfyui.ingress.className | string | `""` | IngressClass name. Unlike `ingress.className` this does not default to anything; empty uses the cluster's default IngressClass. |
+| comfyui.ingress.enabled | bool | `false` | Expose ComfyUI through an Ingress of its own. |
+| comfyui.ingress.hosts | list | `[{"host":"comfyui.local","paths":[{"path":"/","pathType":"Prefix"}]}]` | Ingress host rules. Serving ComfyUI from a subpath works too: set `path` to e.g. /comfy and it is rewritten onto ComfyUI's path. |
+| comfyui.ingress.rewrite | bool | `true` | Rewrite the host root onto ComfyUI's path using ingress-nginx annotations. |
+| comfyui.ingress.tls | list | `[]` | TLS configuration. |
 | comfyui.injectModel | bool | `true` | Add the ComfyUI model entry to the rendered config. |
-| comfyui.name | string | `"comfyui"` | Key of the model entry, and therefore the proxy path: /upstream/<name>/. |
+| comfyui.name | string | `"comfyui_auto"` | Key of the model entry. `comfyui_auto` unlocks llama-swap's built-in ComfyUI route at /comfyui/; any other value is proxied at /upstream/<name>/. |
 | comfyui.ttl | int | `900` | Seconds of inactivity after which ComfyUI is stopped and the GPU freed. |
 | comfyui.unlisted | bool | `true` | Hide ComfyUI from /v1/models. |
 | env | list | `[]` | Environment variables for the container (list of name/value or name/valueFrom). Referenced from the config as `${env.NAME}`. |
