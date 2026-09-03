@@ -1,0 +1,57 @@
+{{- if and .Values.comfyui.enabled .Values.comfyui.ingress.enabled -}}
+{{- $ingress := .Values.comfyui.ingress -}}
+{{- $upstream := include "llama-swap.comfyuiUpstreamPath" . -}}
+{{- $annotations := dict -}}
+{{- if $ingress.rewrite -}}
+{{- $_ := set $annotations "nginx.ingress.kubernetes.io/use-regex" "true" -}}
+{{- $_ := set $annotations "nginx.ingress.kubernetes.io/rewrite-target" (printf "%s$2" $upstream) -}}
+{{- end -}}
+{{- $annotations = merge (deepCopy (default (dict) $ingress.annotations)) $annotations -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "llama-swap.comfyuiFullname" . }}
+  labels:
+    {{- include "llama-swap.labels" . | nindent 4 }}
+  {{- with $annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if $ingress.tls }}
+  tls:
+    {{- range $ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range $ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          {{- $path := .path | default "/" | trimSuffix "/" }}
+          {{- if $ingress.rewrite }}
+          # Two capture groups either way, so one rewrite-target fits every
+          # path in this Ingress: $2 is whatever followed the prefix.
+          - path: {{ if $path }}{{ printf "%s(/|$)(.*)" $path }}{{ else }}/()(.*){{ end }}
+            pathType: ImplementationSpecific
+          {{- else }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+          {{- end }}
+            backend:
+              service:
+                name: {{ include "llama-swap.fullname" $ }}
+                port:
+                  name: http
+          {{- end }}
+    {{- end }}
+{{- end }}

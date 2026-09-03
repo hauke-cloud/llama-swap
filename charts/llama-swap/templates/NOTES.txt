@@ -32,10 +32,42 @@ The web UI is at /ui, currently loaded models at /running, and Prometheus
 metrics at /metrics.
 {{- if .Values.comfyui.enabled }}
 
-ComfyUI is served through the same port, at /upstream/{{ .Values.comfyui.name }}/ — no
-separate Service or Ingress. Opening that path starts it, exactly like an
-inference request starts an LLM; it stops again after {{ .Values.comfyui.ttl }}s idle.
+ComfyUI is served through the same port, at {{ include "llama-swap.comfyuiUpstreamPath" . }}. Opening that
+path starts it, exactly like an inference request starts an LLM; it stops again
+after {{ .Values.comfyui.ttl }}s idle.
+{{- if ne .Values.comfyui.name "comfyui_auto" }}
+The model is named `{{ .Values.comfyui.name }}`, so llama-swap's built-in /comfyui/ route is not
+used; set comfyui.name=comfyui_auto (needs llama-swap v249+) to get it.
+{{- end }}
+{{- if .Values.comfyui.ingress.enabled }}
+
+It has an Ingress of its own at:
+{{- range $host := .Values.comfyui.ingress.hosts }}
+{{- range .paths }}
+  http{{ if $.Values.comfyui.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+{{- end }}
+{{- end }}
+{{- if .Values.comfyui.ingress.rewrite }}
+  (rewritten onto {{ include "llama-swap.comfyuiUpstreamPath" . }} by ingress-nginx)
+{{- else }}
+{{- $bare := false }}
+{{- range $host := .Values.comfyui.ingress.hosts }}
+{{- range .paths }}
+{{- if not (hasPrefix (include "llama-swap.comfyuiUpstreamPath" $ | trimSuffix "/") .path) }}
+{{- $bare = true }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if $bare }}
+
+WARNING: comfyui.ingress.rewrite=false, and paths above do not start with
+{{ include "llama-swap.comfyuiUpstreamPath" . }} — unless your controller rewrites them itself they
+reach llama-swap's own API and UI, not ComfyUI.
+{{- end }}
+{{- end }}
+{{- end }}
 {{- if not .Values.comfyui.group }}
+
 It shares llama-swap's default exclusive group, so starting ComfyUI unloads the
 resident LLM and vice versa.
 {{- if (include "llama-swap.config" . | fromYaml).groups }}
@@ -46,6 +78,7 @@ beside one of them and both will claim the same GPU. Set comfyui.group to the
 group holding your llama.cpp models.
 {{- end }}
 {{- else }}
+
 It is a member of the `{{ .Values.comfyui.group }}` group, so it swaps against the models
 in it.
 {{- end }}

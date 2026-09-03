@@ -120,6 +120,28 @@ Name of the ComfyUI data PVC created by this chart
 {{- end }}
 
 {{/*
+Name of the ComfyUI Ingress
+*/}}
+{{- define "llama-swap.comfyuiFullname" -}}
+{{- printf "%s-comfyui" (include "llama-swap.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Path llama-swap serves the ComfyUI model on, with a trailing slash. The model
+id `comfyui_auto` has a dedicated route (llama-swap v249+); everything else
+goes through the generic upstream passthrough. ComfyUI derives its API base
+from the page URL, so it works under either prefix as long as the trailing
+slash survives.
+*/}}
+{{- define "llama-swap.comfyuiUpstreamPath" -}}
+{{- if eq .Values.comfyui.name "comfyui_auto" -}}
+/comfyui/
+{{- else -}}
+{{- printf "/upstream/%s/" .Values.comfyui.name }}
+{{- end -}}
+{{- end }}
+
+{{/*
 Whether the ComfyUI data volume is mounted into the pod.
 */}}
 {{- define "llama-swap.comfyuiVolumeEnabled" -}}
@@ -154,6 +176,9 @@ proxy: "http://127.0.0.1:${PORT}"
 checkEndpoint: {{ $c.checkEndpoint | quote }}
 unlisted: {{ $c.unlisted }}
 ttl: {{ $c.ttl }}
+concurrencyLimit: {{ $c.concurrencyLimit }}
+compat:
+  ignoreWebsockets: {{ $c.ignoreWebsockets }}
 {{- end }}
 
 {{/*
@@ -219,6 +244,9 @@ Fail early on value combinations that produce a broken release.
 {{- if and .Values.persistence.models.hostPath (not .Values.persistence.models.enabled) }}
 {{- fail "llama-swap: persistence.models.hostPath requires persistence.models.enabled=true" }}
 {{- end }}
+{{- if and .Values.comfyui.ingress.enabled (not .Values.comfyui.enabled) }}
+{{- fail "llama-swap: comfyui.ingress.enabled requires comfyui.enabled" }}
+{{- end }}
 {{- if and .Values.gpu.enabled (not .Values.gpu.resourceName) }}
 {{- fail "llama-swap: gpu.enabled requires gpu.resourceName (e.g. nvidia.com/gpu)" }}
 {{- end }}
@@ -231,6 +259,9 @@ Fail early on value combinations that produce a broken release.
 {{- end }}
 {{- if and .Values.comfyui.injectModel .Values.llamaSwap.existingConfigMap }}
 {{- fail "llama-swap: comfyui.injectModel cannot patch llamaSwap.existingConfigMap — add the comfyui model to that ConfigMap yourself and set comfyui.injectModel=false" }}
+{{- end }}
+{{- if and .Values.comfyui.ingress.enabled (not .Values.comfyui.ingress.hosts) }}
+{{- fail "llama-swap: comfyui.ingress.enabled requires comfyui.ingress.hosts" }}
 {{- end }}
 {{- if and .Values.persistence.comfyui.existingClaim .Values.persistence.comfyui.hostPath }}
 {{- fail "llama-swap: persistence.comfyui.existingClaim and persistence.comfyui.hostPath are mutually exclusive" }}
