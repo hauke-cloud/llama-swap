@@ -196,10 +196,10 @@ comfyui:
 ```
 
 `rewrite: true` (the default) turns each entry in `paths` into a rule that rewrites onto
-ComfyUI's prefix, derived from `comfyui.name`. Gateway API rewrites append whatever
-followed the matched prefix, so the prefix carries no trailing slash; set
-`replacePrefixMatch` to override it. TLS belongs to the Gateway's listener, so there is
-no `tls` block here.
+ComfyUI's prefix, derived from `comfyui.name`. The prefix keeps its trailing slash,
+which Gateway API preserves when the request is the bare prefix — so the host root lands
+on `/comfyui/`, exactly what the `rewrite-target` produced. Set `replacePrefixMatch` to
+override it. TLS belongs to the Gateway's listener, so there is no `tls` block here.
 
 Both routes front the same process, so `apiKeys` guards this hostname too:
 `/comfyui/` runs through the same auth middleware as `/v1`. llama-swap answers a
