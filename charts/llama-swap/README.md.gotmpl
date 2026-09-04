@@ -175,12 +175,33 @@ mode. ComfyUI derives its API base from the page URL, so the UI, `/api` and the
 websocket all follow the rewrite without further configuration.
 
 On another controller set `rewrite: false` and either point `path` at `/comfyui`
-directly, or do the rewrite in your own way — a Traefik middleware, a Gateway API
-`URLRewrite` filter — through `annotations`. Leaving `rewrite: false` with `path: /`
-publishes all of llama-swap on that hostname, API and UI included; `helm install`
-prints a warning when it detects that.
+directly, or do the rewrite in your own way — a Traefik middleware, an annotation your
+controller understands. Leaving `rewrite: false` with `path: /` publishes all of
+llama-swap on that hostname, API and UI included; `helm install` prints a warning when
+it detects that.
 
-Both Ingresses front the same process, so `apiKeys` guards this hostname too:
+`comfyui.httpRoute` is the Gateway API version of the same thing, and there the rewrite
+is a first-class `URLRewrite` filter rather than an annotation:
+
+```yaml
+comfyui:
+  enabled: true
+  httpRoute:
+    enabled: true
+    parentRefs:
+      - name: hauke-cloud
+        namespace: envoy-gateway
+    hostnames:
+      - comfy.example.com
+```
+
+`rewrite: true` (the default) turns each entry in `paths` into a rule that rewrites onto
+ComfyUI's prefix, derived from `comfyui.name`. Gateway API rewrites append whatever
+followed the matched prefix, so the prefix carries no trailing slash; set
+`replacePrefixMatch` to override it. TLS belongs to the Gateway's listener, so there is
+no `tls` block here.
+
+Both routes front the same process, so `apiKeys` guards this hostname too:
 `/comfyui/` runs through the same auth middleware as `/v1`. llama-swap answers a
 missing key with `WWW-Authenticate: Basic`, so a browser prompts and any username with
 the API key as the password gets in. Without `apiKeys`, anyone who can reach the host
@@ -283,6 +304,44 @@ ingress:
 
 Note that anything reachable through that Ingress can run inference on your GPU unless
 you configure `apiKeys`.
+
+### Gateway API
+
+`httpRoute` is the same thing for a cluster running an API gateway rather than an Ingress
+controller. It attaches to a Gateway that already terminates TLS, so there is no `tls`
+block and no controller-specific annotations — the timeouts are part of the route:
+
+```yaml
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: hauke-cloud
+      namespace: envoy-gateway
+  hostnames:
+    - llm.example.com
+  timeouts:
+    request: 0s
+    backendRequest: 0s
+```
+
+`0s` disables the timeout; without it Envoy cuts the request off after 15 seconds, long
+before a cold model has loaded. A cross-namespace `parentRefs` entry only attaches if
+that Gateway's listener allows routes from this namespace.
+
+`rules` is there for anything the generated rule does not cover. Each entry is a Gateway
+API rule, and one without `backendRefs` is pointed at this chart's Service:
+
+```yaml
+httpRoute:
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+```
+
+`ingress` and `httpRoute` are independent, so both can be enabled while a cluster
+migrates from one to the other.
 
 ## Probes and slow starts
 

@@ -175,12 +175,33 @@ mode. ComfyUI derives its API base from the page URL, so the UI, `/api` and the
 websocket all follow the rewrite without further configuration.
 
 On another controller set `rewrite: false` and either point `path` at `/comfyui`
-directly, or do the rewrite in your own way — a Traefik middleware, a Gateway API
-`URLRewrite` filter — through `annotations`. Leaving `rewrite: false` with `path: /`
-publishes all of llama-swap on that hostname, API and UI included; `helm install`
-prints a warning when it detects that.
+directly, or do the rewrite in your own way — a Traefik middleware, an annotation your
+controller understands. Leaving `rewrite: false` with `path: /` publishes all of
+llama-swap on that hostname, API and UI included; `helm install` prints a warning when
+it detects that.
 
-Both Ingresses front the same process, so `apiKeys` guards this hostname too:
+`comfyui.httpRoute` is the Gateway API version of the same thing, and there the rewrite
+is a first-class `URLRewrite` filter rather than an annotation:
+
+```yaml
+comfyui:
+  enabled: true
+  httpRoute:
+    enabled: true
+    parentRefs:
+      - name: hauke-cloud
+        namespace: envoy-gateway
+    hostnames:
+      - comfy.example.com
+```
+
+`rewrite: true` (the default) turns each entry in `paths` into a rule that rewrites onto
+ComfyUI's prefix, derived from `comfyui.name`. Gateway API rewrites append whatever
+followed the matched prefix, so the prefix carries no trailing slash; set
+`replacePrefixMatch` to override it. TLS belongs to the Gateway's listener, so there is
+no `tls` block here.
+
+Both routes front the same process, so `apiKeys` guards this hostname too:
 `/comfyui/` runs through the same auth middleware as `/v1`. llama-swap answers a
 missing key with `WWW-Authenticate: Basic`, so a browser prompts and any username with
 the API key as the password gets in. Without `apiKeys`, anyone who can reach the host
@@ -284,6 +305,44 @@ ingress:
 Note that anything reachable through that Ingress can run inference on your GPU unless
 you configure `apiKeys`.
 
+### Gateway API
+
+`httpRoute` is the same thing for a cluster running an API gateway rather than an Ingress
+controller. It attaches to a Gateway that already terminates TLS, so there is no `tls`
+block and no controller-specific annotations — the timeouts are part of the route:
+
+```yaml
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: hauke-cloud
+      namespace: envoy-gateway
+  hostnames:
+    - llm.example.com
+  timeouts:
+    request: 0s
+    backendRequest: 0s
+```
+
+`0s` disables the timeout; without it Envoy cuts the request off after 15 seconds, long
+before a cold model has loaded. A cross-namespace `parentRefs` entry only attaches if
+that Gateway's listener allows routes from this namespace.
+
+`rules` is there for anything the generated rule does not cover. Each entry is a Gateway
+API rule, and one without `backendRefs` is pointed at this chart's Service:
+
+```yaml
+httpRoute:
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+```
+
+`ingress` and `httpRoute` are independent, so both can be enabled while a cluster
+migrates from one to the other.
+
 ## Probes and slow starts
 
 All three probes hit `/health`, which the proxy answers as soon as it is listening —
@@ -306,6 +365,16 @@ something large from slow storage.
 | comfyui.extraArgs | list | `[]` | Extra command line arguments for ComfyUI, e.g. ["--fast", "--preview-method", "auto"]. |
 | comfyui.group | string | `""` | Group to add ComfyUI to. Empty leaves it in the default group. |
 | comfyui.home | string | `"/opt/comfyui"` | Where ComfyUI is installed in the image. Holds `app/` and the `venv/` that torch lives in. |
+| comfyui.httpRoute.annotations | object | `{}` | Annotations for the HTTPRoute. |
+| comfyui.httpRoute.enabled | bool | `false` | Expose ComfyUI through a Gateway API HTTPRoute of its own. |
+| comfyui.httpRoute.hostnames | list | `["comfyui.local"]` | Hostnames served by this route. |
+| comfyui.httpRoute.labels | object | `{}` | Extra labels for the HTTPRoute. |
+| comfyui.httpRoute.parentRefs | list | `[{"name":"hauke-cloud","namespace":"envoy-gateway"}]` | Gateways this route attaches to. |
+| comfyui.httpRoute.paths | list | `["/"]` | Path prefixes matched on those hostnames. Serving ComfyUI from a subpath works too: use e.g. /comfy and it is rewritten onto ComfyUI's path. |
+| comfyui.httpRoute.replacePrefixMatch | string | `""` | Prefix the request is rewritten onto. Empty derives it from `comfyui.name`. |
+| comfyui.httpRoute.rewrite | bool | `true` | Rewrite the matched prefix onto ComfyUI's path with a URLRewrite filter, so the browser asks for /foo and llama-swap sees /comfyui/foo. Leaving this false with `paths: ["/"]` publishes all of llama-swap — its API and UI included — on this hostname. |
+| comfyui.httpRoute.rules | list | `[]` | Route rules. Empty builds them from `paths` and `rewrite` above; set this to take full control, and `paths`/`rewrite` are then ignored. |
+| comfyui.httpRoute.timeouts | object | `{"backendRequest":"0s","request":"0s"}` | Per-request timeouts. |
 | comfyui.ignoreWebsockets | bool | `true` | Keep websockets out of swap, concurrency and TTL accounting, so an open browser tab does not pin ComfyUI to the GPU forever. |
 | comfyui.image.repository | string | `"ghcr.io/hauke-cloud/llama-swap-comfyui"` | ComfyUI image repository. |
 | comfyui.image.tag | string | `"cuda-non-root"` | ComfyUI image tag. `-non-root` matches the uid/gid the securityContext expects. |
@@ -327,6 +396,13 @@ something large from slow storage.
 | gpu.count | int | `1` | Number of devices to request. Added to resources.limits. |
 | gpu.enabled | bool | `false` | Request a GPU for the pod. Requires a matching device plugin and a GPU image variant (see image.tag). |
 | gpu.resourceName | string | `"nvidia.com/gpu"` | Extended resource name, e.g. nvidia.com/gpu, amd.com/gpu, gpu.intel.com/i915. |
+| httpRoute.annotations | object | `{}` | Annotations for the HTTPRoute. |
+| httpRoute.enabled | bool | `false` | Expose llama-swap through a Gateway API HTTPRoute. |
+| httpRoute.hostnames | list | `["llama-swap.local"]` | Hostnames served by this route. Each must match a listener hostname on the parent Gateway. |
+| httpRoute.labels | object | `{}` | Extra labels for the HTTPRoute. |
+| httpRoute.parentRefs | list | `[{"name":"hauke-cloud","namespace":"envoy-gateway"}]` | Gateways this route attaches to. |
+| httpRoute.rules | list | `[]` | Route rules. Empty emits one rule matching everything under `/`. Entries without `backendRefs` are pointed at this chart's Service, so a rule usually only carries `matches` and `filters`. |
+| httpRoute.timeouts | object | `{"backendRequest":"0s","request":"0s"}` | Per-request timeouts. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
 | image.repository | string | `"ghcr.io/mostlygeek/llama-swap"` | llama-swap image repository. |
 | image.tag | string | `"v243-cpu-b10133-non-root"` | Image tag, pinning the llama-swap release, the backend and the llama.cpp build. |

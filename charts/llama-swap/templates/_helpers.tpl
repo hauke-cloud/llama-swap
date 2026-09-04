@@ -247,6 +247,12 @@ Fail early on value combinations that produce a broken release.
 {{- if and .Values.comfyui.ingress.enabled (not .Values.comfyui.enabled) }}
 {{- fail "llama-swap: comfyui.ingress.enabled requires comfyui.enabled" }}
 {{- end }}
+{{- if and .Values.comfyui.httpRoute.enabled (not .Values.comfyui.enabled) }}
+{{- fail "llama-swap: comfyui.httpRoute.enabled requires comfyui.enabled" }}
+{{- end }}
+{{- if and .Values.httpRoute.enabled (not .Values.httpRoute.parentRefs) }}
+{{- fail "llama-swap: httpRoute.enabled requires httpRoute.parentRefs" }}
+{{- end }}
 {{- if and .Values.gpu.enabled (not .Values.gpu.resourceName) }}
 {{- fail "llama-swap: gpu.enabled requires gpu.resourceName (e.g. nvidia.com/gpu)" }}
 {{- end }}
@@ -263,6 +269,12 @@ Fail early on value combinations that produce a broken release.
 {{- if and .Values.comfyui.ingress.enabled (not .Values.comfyui.ingress.hosts) }}
 {{- fail "llama-swap: comfyui.ingress.enabled requires comfyui.ingress.hosts" }}
 {{- end }}
+{{- if and .Values.comfyui.httpRoute.enabled (not .Values.comfyui.httpRoute.parentRefs) }}
+{{- fail "llama-swap: comfyui.httpRoute.enabled requires comfyui.httpRoute.parentRefs" }}
+{{- end }}
+{{- if and .Values.comfyui.httpRoute.enabled (not .Values.comfyui.httpRoute.hostnames) }}
+{{- fail "llama-swap: comfyui.httpRoute.enabled requires comfyui.httpRoute.hostnames" }}
+{{- end }}
 {{- if and .Values.persistence.comfyui.existingClaim .Values.persistence.comfyui.hostPath }}
 {{- fail "llama-swap: persistence.comfyui.existingClaim and persistence.comfyui.hostPath are mutually exclusive" }}
 {{- end }}
@@ -270,4 +282,44 @@ Fail early on value combinations that produce a broken release.
 {{- fail "llama-swap: persistence.comfyui.hostPath requires persistence.comfyui.enabled=true" }}
 {{- end }}
 {{- end }}
+{{- end }}
+
+{{/*
+Rules for an HTTPRoute. Takes a dict of `context` (the root scope) and `route`
+(one of the `httpRoute` value blocks). Every rule in `route.rules` gets this
+chart's Service filled in as its backend and `route.timeouts` applied, unless
+it sets its own. An empty `route.rules` yields a single rule matching
+everything under `/`, which is the HTTPRoute equivalent of the Ingress default.
+*/}}
+{{- define "llama-swap.httpRouteRules" -}}
+{{- $ctx := .context -}}
+{{- $route := .route -}}
+{{- $default := list (dict "matches" (list (dict "path" (dict "type" "PathPrefix" "value" "/")))) -}}
+{{- $rules := default $default (.rules | default $route.rules) -}}
+{{- $backend := dict "name" (include "llama-swap.fullname" $ctx) "port" (int $ctx.Values.service.port) -}}
+{{- $out := list -}}
+{{- range $rules -}}
+{{- $rule := deepCopy . -}}
+{{- if not (hasKey $rule "backendRefs") -}}
+{{- $_ := set $rule "backendRefs" (list $backend) -}}
+{{- end -}}
+{{- if and $route.timeouts (not (hasKey $rule "timeouts")) -}}
+{{- $_ := set $rule "timeouts" $route.timeouts -}}
+{{- end -}}
+{{- $out = append $out $rule -}}
+{{- end -}}
+{{- toYaml $out -}}
+{{- end }}
+
+{{/*
+Prefix ComfyUI's HTTPRoute rewrites the host root onto. Derived from the
+llama-swap upstream path, without its trailing slash: Gateway API's
+ReplacePrefixMatch joins the remainder of the path back on itself.
+*/}}
+{{- define "llama-swap.comfyuiReplacePrefixMatch" -}}
+{{- if .Values.comfyui.httpRoute.replacePrefixMatch -}}
+{{- .Values.comfyui.httpRoute.replacePrefixMatch -}}
+{{- else -}}
+{{- include "llama-swap.comfyuiUpstreamPath" . | trimSuffix "/" -}}
+{{- end -}}
 {{- end }}

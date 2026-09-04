@@ -199,6 +199,47 @@ comfyui:
             pathType: Prefix
     # -- TLS configuration.
     tls: []
+
+  # Gateway API counterpart of `comfyui.ingress` above. The rewrite that makes
+  # the host root work is a standard URLRewrite filter here, so unlike the
+  # Ingress it needs nothing controller-specific.
+  httpRoute:
+    # -- Expose ComfyUI through a Gateway API HTTPRoute of its own.
+    enabled: false
+    # -- Annotations for the HTTPRoute.
+    annotations: {}
+    # -- Extra labels for the HTTPRoute.
+    labels: {}
+    # -- Gateways this route attaches to.
+    parentRefs:
+      - name: hauke-cloud
+        namespace: envoy-gateway
+    # -- Hostnames served by this route.
+    hostnames:
+      - comfyui.local
+    # -- Rewrite the matched prefix onto ComfyUI's path with a URLRewrite
+    # filter, so the browser asks for /foo and llama-swap sees /comfyui/foo.
+    # Leaving this false with `paths: ["/"]` publishes all of llama-swap — its
+    # API and UI included — on this hostname.
+    rewrite: true
+    # Gateway API rewrites append whatever followed the matched prefix, so this
+    # carries no trailing slash. Set it explicitly to override the path derived
+    # from `comfyui.name`.
+    # -- Prefix the request is rewritten onto. Empty derives it from `comfyui.name`.
+    replacePrefixMatch: ""
+    # -- Path prefixes matched on those hostnames. Serving ComfyUI from a
+    # subpath works too: use e.g. /comfy and it is rewritten onto ComfyUI's path.
+    paths:
+      - /
+    # ComfyUI uploads whole images and holds a websocket open for progress
+    # updates, so the same reasoning as `httpRoute.timeouts` applies.
+    # -- Per-request timeouts.
+    timeouts:
+      request: 0s
+      backendRequest: 0s
+    # -- Route rules. Empty builds them from `paths` and `rewrite` above; set
+    # this to take full control, and `paths`/`rewrite` are then ignored.
+    rules: []
   # -- Extra command line arguments for ComfyUI, e.g. ["--fast", "--preview-method", "auto"].
   extraArgs: []
   # -- Override the ComfyUI command entirely. Empty builds it from the values
@@ -292,6 +333,43 @@ ingress:
           pathType: Prefix
   # -- TLS configuration.
   tls: []
+
+# Gateway API counterpart of `ingress` above, for clusters running an API
+# gateway (Envoy Gateway, Istio, Cilium) instead of an Ingress controller. The
+# two are independent: enable both while a cluster migrates, then drop the
+# Ingress. TLS is not configured here — a Gateway terminates it on its listener,
+# not per route.
+httpRoute:
+  # -- Expose llama-swap through a Gateway API HTTPRoute.
+  enabled: false
+  # -- Annotations for the HTTPRoute.
+  annotations: {}
+  # -- Extra labels for the HTTPRoute.
+  labels: {}
+  # A parentRef in another namespace is only accepted if that Gateway's listener
+  # allows routes from this one. `sectionName` pins the route to a single
+  # listener; leaving it out attaches it to every listener whose hostname
+  # matches.
+  # -- Gateways this route attaches to.
+  parentRefs:
+    - name: hauke-cloud
+      namespace: envoy-gateway
+  # -- Hostnames served by this route. Each must match a listener hostname on
+  # the parent Gateway.
+  hostnames:
+    - llama-swap.local
+  # Token streaming and cold model loads hold a request open for minutes, well
+  # past the 15s Envoy applies by default. "0s" disables the timeout, which is
+  # what the proxy-read-timeout/proxy-send-timeout annotations do on
+  # ingress-nginx. Applied to every rule that does not set its own.
+  # -- Per-request timeouts.
+  timeouts:
+    request: 0s
+    backendRequest: 0s
+  # -- Route rules. Empty emits one rule matching everything under `/`. Entries
+  # without `backendRefs` are pointed at this chart's Service, so a rule usually
+  # only carries `matches` and `filters`.
+  rules: []
 
 persistence:
   models:
