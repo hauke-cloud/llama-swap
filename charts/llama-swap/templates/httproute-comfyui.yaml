@@ -1,0 +1,40 @@
+{{- if and .Values.comfyui.enabled .Values.comfyui.httpRoute.enabled -}}
+{{- $route := .Values.comfyui.httpRoute -}}
+{{- $rules := $route.rules -}}
+{{- if not $rules -}}
+{{- $filters := list -}}
+{{- if $route.rewrite -}}
+{{- $filters = list (dict "type" "URLRewrite" "urlRewrite" (dict "path" (dict "type" "ReplacePrefixMatch" "replacePrefixMatch" (include "llama-swap.comfyuiReplacePrefixMatch" .)))) -}}
+{{- end -}}
+{{- $rules = list -}}
+{{- range $route.paths | default (list "/") -}}
+{{- $rule := dict "matches" (list (dict "path" (dict "type" "PathPrefix" "value" .))) -}}
+{{- if $filters -}}
+{{- $_ := set $rule "filters" $filters -}}
+{{- end -}}
+{{- $rules = append $rules $rule -}}
+{{- end -}}
+{{- end -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "llama-swap.comfyuiFullname" . }}
+  labels:
+    {{- include "llama-swap.labels" . | nindent 4 }}
+    {{- with $route.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $route.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml $route.parentRefs | nindent 4 }}
+  {{- with $route.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- include "llama-swap.httpRouteRules" (dict "context" . "route" $route "rules" $rules) | nindent 4 }}
+{{- end }}
