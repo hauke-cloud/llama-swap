@@ -222,8 +222,10 @@ comfyui:
     # Leaving this false with `paths: ["/"]` publishes all of llama-swap — its
     # API and UI included — on this hostname.
     rewrite: true
-    # Keep the trailing slash: Gateway API preserves it when the request is the
-    # bare prefix, so the host root lands on /comfyui/ and not /comfyui.
+    # A trailing slash here is dropped: Envoy Gateway trims one on the way into
+    # Envoy's prefix_rewrite, so the host root lands on /comfyui and llama-swap
+    # redirects it to /comfyui/. The rendered route publishes this prefix as a
+    # second, unrewritten rule so that redirect resolves.
     # -- Prefix the request is rewritten onto. Empty derives it from `comfyui.name`.
     replacePrefixMatch: ""
     # -- Path prefixes matched on those hostnames. Serving ComfyUI from a
