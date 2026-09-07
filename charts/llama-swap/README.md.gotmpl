@@ -196,10 +196,15 @@ comfyui:
 ```
 
 `rewrite: true` (the default) turns each entry in `paths` into a rule that rewrites onto
-ComfyUI's prefix, derived from `comfyui.name`. The prefix keeps its trailing slash,
-which Gateway API preserves when the request is the bare prefix — so the host root lands
-on `/comfyui/`, exactly what the `rewrite-target` produced. Set `replacePrefixMatch` to
-override it. TLS belongs to the Gateway's listener, so there is no `tls` block here.
+ComfyUI's prefix, derived from `comfyui.name`, and adds one more rule publishing that
+prefix unrewritten. Both are needed. Envoy rewrites by swapping the matched prefix for
+the replacement as a plain string, so the host root arrives as `/comfyui`, llama-swap
+answers `301 /comfyui/`, and without the second rule the redirect comes back through the
+rewrite and is glued into `/comfyuicomfyui/` — a 404. The unrewritten rule is the longer
+path match, so it takes precedence and serves the redirect target and every relative
+asset under it. Set `replacePrefixMatch` to override the prefix; a trailing slash on it
+is dropped, because Envoy Gateway trims one anyway. TLS belongs to the Gateway's
+listener, so there is no `tls` block here.
 
 Both routes front the same process, so `apiKeys` guards this hostname too:
 `/comfyui/` runs through the same auth middleware as `/v1`. llama-swap answers a
