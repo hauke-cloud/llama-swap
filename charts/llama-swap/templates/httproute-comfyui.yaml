@@ -1,13 +1,27 @@
 {{- if and .Values.comfyui.enabled .Values.comfyui.httpRoute.enabled -}}
 {{- $route := .Values.comfyui.httpRoute -}}
 {{- $rules := $route.rules -}}
+{{- $paths := $route.paths | default (list "/") -}}
 {{- if not $rules -}}
 {{- $filters := list -}}
+{{- $prefix := include "llama-swap.comfyuiReplacePrefixMatch" . -}}
 {{- if $route.rewrite -}}
-{{- $filters = list (dict "type" "URLRewrite" "urlRewrite" (dict "path" (dict "type" "ReplacePrefixMatch" "replacePrefixMatch" (include "llama-swap.comfyuiReplacePrefixMatch" .)))) -}}
+{{- $filters = list (dict "type" "URLRewrite" "urlRewrite" (dict "path" (dict "type" "ReplacePrefixMatch" "replacePrefixMatch" $prefix))) -}}
 {{- end -}}
 {{- $rules = list -}}
-{{- range $route.paths | default (list "/") -}}
+{{/*
+A rewrite rule alone cannot serve ComfyUI, because Envoy rewrites by swapping
+the matched prefix for `$prefix` as a plain string, with no separator. The host
+root becomes `/comfyui`, llama-swap answers 301 `/comfyui/`, and the browser
+sends that back through the same rule -- which glues it into `/comfyuicomfyui/`
+and 404s. So publish `$prefix` itself as a rule with no filters: it is the
+longer path match, so it wins over the rewrite rule, and the redirect target and
+every relative asset under it reach llama-swap untouched.
+*/}}
+{{- if and $filters (not (has $prefix $paths)) -}}
+{{- $rules = append $rules (dict "matches" (list (dict "path" (dict "type" "PathPrefix" "value" $prefix)))) -}}
+{{- end -}}
+{{- range $paths -}}
 {{- $rule := dict "matches" (list (dict "path" (dict "type" "PathPrefix" "value" .))) -}}
 {{- if $filters -}}
 {{- $_ := set $rule "filters" $filters -}}

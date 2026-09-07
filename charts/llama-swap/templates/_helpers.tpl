@@ -312,16 +312,19 @@ everything under `/`, which is the HTTPRoute equivalent of the Ingress default.
 {{- end }}
 
 {{/*
-Prefix ComfyUI's HTTPRoute rewrites the host root onto: the llama-swap upstream
-path, trailing slash and all. Gateway API keeps that slash when the request is
-the bare prefix, so `/` becomes `/comfyui/` rather than `/comfyui` -- which is
-what the ingress-nginx rewrite-target produced, and what ComfyUI needs to derive
-its API base from the page URL.
+Prefix ComfyUI's HTTPRoute rewrites the matched paths onto, without a trailing
+slash. Carrying one here buys nothing: Envoy Gateway trims it on the way into
+Envoy's `prefix_rewrite` (see `strings.TrimSuffix` in its route translator,
+added for envoyproxy/gateway#3989), so `/comfyui/` and `/comfyui` render to the
+same thing. The rewrite therefore drops the host root on `/comfyui`, llama-swap
+redirects that to `/comfyui/`, and the pass-through rule in
+`httproute-comfyui.yaml` is what serves the redirect target -- see the comment
+there.
 */}}
 {{- define "llama-swap.comfyuiReplacePrefixMatch" -}}
 {{- if .Values.comfyui.httpRoute.replacePrefixMatch -}}
-{{- .Values.comfyui.httpRoute.replacePrefixMatch -}}
+{{- .Values.comfyui.httpRoute.replacePrefixMatch | trimSuffix "/" -}}
 {{- else -}}
-{{- include "llama-swap.comfyuiUpstreamPath" . -}}
+{{- include "llama-swap.comfyuiUpstreamPath" . | trimSuffix "/" -}}
 {{- end -}}
 {{- end }}
