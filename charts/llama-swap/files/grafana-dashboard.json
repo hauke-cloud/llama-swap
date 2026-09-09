@@ -30,27 +30,16 @@
         "includeAll": false,
         "multi": false
       },
-      {
-        "name": "gpu",
-        "label": "GPU",
-        "type": "query",
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "query": "label_values(llamaswap_gpu_util_percent{job=\"$job\", namespace=\"$namespace\"}, id)",
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true
-      },
-      {
-        "name": "price",
-        "label": "Price (€/kWh)",
-        "type": "custom",
-        "query": "0.20,0.25,0.30,0.35,0.40,0.45,0.50",
-        "current": { "text": "0.30", "value": "0.30" },
-        "refresh": 2,
-        "includeAll": false,
-        "multi": false,
-        "options": []
-      }
+       {
+         "name": "gpu",
+         "label": "GPU",
+         "type": "query",
+         "datasource": { "type": "prometheus", "uid": "prometheus" },
+         "query": "label_values(llamaswap_gpu_util_percent{job=\"$job\", namespace=\"$namespace\"}, id)",
+         "refresh": 2,
+         "includeAll": true,
+         "multi": true
+       }
     ]
   },
   "annotations": { "list": [] },
@@ -100,7 +89,7 @@
       "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
       "targets": [
         {
-          "expr": "sum(sum_over_time(llamaswap_gpu_power_draw_watts{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"}[24h])) * 30 / 3600 / 1000 * $price",
+          "expr": "sum(sum_over_time((llamaswap_gpu_power_draw_watts{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"} * scalar(sum(tibber_price_current_total) or vector(0)))[24h:30s])) * 30 / 3600 / 1000",
           "refId": "A"
         }
       ],
