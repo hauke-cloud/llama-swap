@@ -379,6 +379,17 @@ rules (`up`, GPU memory, GPU temperature) match on the `service` label the
 Operator derives from the Service, so they do not depend on the scrape's job
 name; set `metrics.prometheusRule.rules` to replace them with your own.
 
+For token-level metrics, the optional `metrics.tokenExporter` sidecar runs
+[llama-token-metrics-exporter](https://github.com/hauke-cloud/llama-token-metrics-exporter)
+in the pod. It polls llama-swap's `/v1/models` and each model's
+`/api/metrics/stats` in the background and serves the result as
+`llamaswap_model_*` and `llamaswap_activity_*` series on its own port — a scrape
+never reaches llama-swap. With the sidecar enabled the ServiceMonitor scrapes
+that endpoint automatically. The token series are gauges over llama-swap's
+activity log window, not monotonic counters: with the default in-memory store
+they plateau and fall, so read them directly instead of wrapping them in
+`rate()` (see the exporter's README).
+
 ## Values
 
 | Key | Type | Default | Description |
@@ -450,7 +461,7 @@ name; set `metrics.prometheusRule.rules` to replace them with your own.
 | llamaSwap.port | int | `8080` | Port llama-swap listens on inside the container. |
 | llamaSwap.watchConfig | bool | `false` | Reload the configuration when the file changes (`--watch-config`). |
 | metrics.grafanaDashboard.annotations | object | `{}` | Extra annotations for the ConfigMap. The folder annotation is added automatically when `folder` is set. |
-| metrics.grafanaDashboard.enabled | bool | `false` | Create a ConfigMap holding the llama-swap Grafana dashboard, labelled `grafana_dashboard: "1"` for the grafana-k8s-sidecar. The dashboard covers all llamaswap_* metrics: GPU utilization, memory, temperature, power, fan, CPU, load average, system memory, swap, and network I/O. |
+| metrics.grafanaDashboard.enabled | bool | `false` | Create a ConfigMap holding the llama-swap Grafana dashboard, labelled `grafana_dashboard: "1"` for the grafana-k8s-sidecar. The dashboard covers all llamaswap_* metrics: GPU utilization, memory, temperature, power, fan, CPU, load average, system memory, swap, network I/O, and — when metrics.tokenExporter is enabled — per-model token counts, cache hits and prefill/generation throughput. |
 | metrics.grafanaDashboard.folder | string | `""` | Grafana folder the sidecar imports the dashboard into. Requires the sidecar's folder feature to be enabled. |
 | metrics.grafanaDashboard.labels | object | `{}` | Extra labels for the ConfigMap. |
 | metrics.grafanaDashboard.namespace | string | `""` | Namespace the dashboard ConfigMap is created in. Empty uses the release namespace. |
@@ -465,12 +476,23 @@ name; set `metrics.prometheusRule.rules` to replace them with your own.
 | metrics.serviceMonitor.labels | object | `{}` | Extra labels for the ServiceMonitor. Prometheus instances commonly select on a label like `release: prometheus`, which belongs here. |
 | metrics.serviceMonitor.namespace | string | `""` | Namespace the ServiceMonitor is created in. Empty uses the release namespace. Prometheus often watches other namespaces, so point this at its own when the Service is scraped from a different one. |
 | metrics.serviceMonitor.scrapeTimeout | string | `"10s"` | Give up on a scrape after this long. |
-| metrics.tokenExporter.enabled | bool | `false` | Run the prometheus-community/json_exporter as a sidecar to convert llama-swap's /api/metrics/stats (token counts, prompt/generation latency histograms) into Prometheus metrics. The ServiceMonitor scrapes the exporter's /probe endpoint, which in turn fetches the stats from llama-swap via localhost. |
+| metrics.tokenExporter.apiKey.existingSecret | string | `""` | Name of the Secret holding the API key. Empty sends no key. |
+| metrics.tokenExporter.apiKey.key | string | `"api-key"` | Key within that Secret. |
+| metrics.tokenExporter.concurrency | int | `4` | Per-model statistics requests in flight at once. |
+| metrics.tokenExporter.enabled | bool | `false` | Run the llama-token-metrics-exporter as a sidecar to export llama-swap's per-model token counts and inference throughput as Prometheus metrics. It polls /v1/models and each model's /api/metrics/stats in the background and serves the snapshot on its own /metrics, so a scrape never reaches llama-swap. The ServiceMonitor scrapes that endpoint on the port below. See https://github.com/hauke-cloud/llama-token-metrics-exporter. |
 | metrics.tokenExporter.image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
-| metrics.tokenExporter.image.repository | string | `"quay.io/prometheuscommunity/json-exporter"` | json_exporter image repository. |
-| metrics.tokenExporter.image.tag | string | `"v0.5.7"` | json_exporter image tag. |
-| metrics.tokenExporter.port | int | `7980` | Port the json_exporter listens on inside the container. |
-| metrics.tokenExporter.resources | object | `{"limits":{"cpu":"100m","memory":"64Mi"},"requests":{"cpu":"10m","memory":"32Mi"}}` | Resource requests and limits for the sidecar. |
+| metrics.tokenExporter.image.repository | string | `"ghcr.io/hauke-cloud/llama-token-metrics-exporter"` | Exporter image repository. |
+| metrics.tokenExporter.image.tag | string | `"latest"` | Exporter image tag. |
+| metrics.tokenExporter.includeTotals | bool | `true` | Also export the unlabelled aggregate across every model (llamaswap_activity_*). |
+| metrics.tokenExporter.llamaSwapUrl | string | `""` | URL of llama-swap as seen from the sidecar. Empty derives `http://127.0.0.1:<llamaSwap.port>`, which works in the shared pod network namespace. |
+| metrics.tokenExporter.livenessProbe | object | `{"failureThreshold":3,"httpGet":{"path":"/healthz","port":"token-metrics"},"periodSeconds":20,"timeoutSeconds":5}` | Liveness probe for the sidecar. |
+| metrics.tokenExporter.logFormat | string | `"json"` | Log format: text or json. |
+| metrics.tokenExporter.logLevel | string | `"info"` | Log level: debug, info, warn, error. |
+| metrics.tokenExporter.modelTypes | list | `["model"]` | Which /v1/models entry types to collect: model, alias, peer, selector. Aliases and selectors resolve to another model before llama-swap writes its activity log, so their statistics stay zero. |
+| metrics.tokenExporter.pollInterval | string | `"30s"` | Gap between polls of the llama-swap API. |
+| metrics.tokenExporter.port | int | `9782` | Port the exporter listens on inside the container. |
+| metrics.tokenExporter.requestTimeout | string | `"10s"` | Timeout for a single API request. |
+| metrics.tokenExporter.resources | object | `{"limits":{"memory":"128Mi"},"requests":{"cpu":"10m","memory":"32Mi"}}` | Resource requests and limits for the sidecar. |
 | nameOverride | string | `""` | Override the chart name portion of resource names. |
 | nodeSelector | object | `{}` | Node selector for pod scheduling. |
 | persistence.comfyui.accessModes | list | `["ReadWriteOnce"]` | Access modes. |

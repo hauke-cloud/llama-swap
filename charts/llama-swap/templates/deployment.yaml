@@ -127,22 +127,56 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
         {{- if .Values.metrics.tokenExporter.enabled }}
-        - name: json-exporter
+        - name: token-metrics-exporter
           image: {{ .Values.metrics.tokenExporter.image.repository }}:{{ .Values.metrics.tokenExporter.image.tag }}
           imagePullPolicy: {{ .Values.metrics.tokenExporter.image.pullPolicy }}
-          args:
-            - --config.file=/etc/json-exporter/config.yml
-            - --web.listen-address=:{{ .Values.metrics.tokenExporter.port }}
+          env:
+            - name: LLAMA_SWAP_URL
+              {{- if .Values.metrics.tokenExporter.llamaSwapUrl }}
+              value: {{ .Values.metrics.tokenExporter.llamaSwapUrl | quote }}
+              {{- else }}
+              value: {{ printf "http://127.0.0.1:%v" .Values.llamaSwap.port | quote }}
+              {{- end }}
+            - name: POLL_INTERVAL
+              value: {{ .Values.metrics.tokenExporter.pollInterval | quote }}
+            - name: REQUEST_TIMEOUT
+              value: {{ .Values.metrics.tokenExporter.requestTimeout | quote }}
+            - name: CONCURRENCY
+              value: {{ .Values.metrics.tokenExporter.concurrency | quote }}
+            - name: INCLUDE_TOTALS
+              value: {{ .Values.metrics.tokenExporter.includeTotals | quote }}
+            - name: MODEL_TYPES
+              value: {{ join "," .Values.metrics.tokenExporter.modelTypes | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.metrics.tokenExporter.logLevel | quote }}
+            - name: LOG_FORMAT
+              value: {{ .Values.metrics.tokenExporter.logFormat | quote }}
+            {{- if .Values.metrics.tokenExporter.apiKey.existingSecret }}
+            - name: LLAMA_SWAP_API_KEY_FILE
+              value: /etc/llama-token-metrics-exporter/api-key
+            {{- end }}
           ports:
             - name: token-metrics
               containerPort: {{ .Values.metrics.tokenExporter.port }}
               protocol: TCP
+          {{- with .Values.metrics.tokenExporter.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           resources:
             {{- toYaml .Values.metrics.tokenExporter.resources | nindent 12 }}
+          {{- if .Values.metrics.tokenExporter.apiKey.existingSecret }}
           volumeMounts:
-            - name: json-exporter-config
-              mountPath: /etc/json-exporter
+            - name: token-exporter-api-key
+              mountPath: /etc/llama-token-metrics-exporter
               readOnly: true
+          {{- end }}
         {{- end }}
       volumes:
         - name: config
@@ -184,10 +218,13 @@ spec:
             medium: Memory
             sizeLimit: {{ .Values.shm.sizeLimit }}
         {{- end }}
-        {{- if .Values.metrics.tokenExporter.enabled }}
-        - name: json-exporter-config
-          configMap:
-            name: {{ include "llama-swap.fullname" . }}-json-exporter
+        {{- if and .Values.metrics.tokenExporter.enabled .Values.metrics.tokenExporter.apiKey.existingSecret }}
+        - name: token-exporter-api-key
+          secret:
+            secretName: {{ .Values.metrics.tokenExporter.apiKey.existingSecret }}
+            items:
+              - key: {{ .Values.metrics.tokenExporter.apiKey.key }}
+                path: api-key
         {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}

@@ -379,6 +379,17 @@ rules (`up`, GPU memory, GPU temperature) match on the `service` label the
 Operator derives from the Service, so they do not depend on the scrape's job
 name; set `metrics.prometheusRule.rules` to replace them with your own.
 
+For token-level metrics, the optional `metrics.tokenExporter` sidecar runs
+[llama-token-metrics-exporter](https://github.com/hauke-cloud/llama-token-metrics-exporter)
+in the pod. It polls llama-swap's `/v1/models` and each model's
+`/api/metrics/stats` in the background and serves the result as
+`llamaswap_model_*` and `llamaswap_activity_*` series on its own port — a scrape
+never reaches llama-swap. With the sidecar enabled the ServiceMonitor scrapes
+that endpoint automatically. The token series are gauges over llama-swap's
+activity log window, not monotonic counters: with the default in-memory store
+they plateau and fall, so read them directly instead of wrapping them in
+`rate()` (see the exporter's README).
+
 {{ template "chart.requirementsSection" . }}
 
 {{ template "chart.valuesSection" . }}

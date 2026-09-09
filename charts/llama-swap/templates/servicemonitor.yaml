@@ -29,10 +29,7 @@ spec:
       scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
     {{- if .Values.metrics.tokenExporter.enabled }}
     - port: token-metrics
-      path: /probe
-      params:
-        target:
-          - "http://127.0.0.1:{{ .Values.llamaSwap.port }}/api/metrics/stats"
+      path: /metrics
       interval: {{ .Values.metrics.serviceMonitor.interval }}
       scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
     {{- end }}

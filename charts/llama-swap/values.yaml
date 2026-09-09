@@ -352,7 +352,9 @@ metrics:
     # -- Create a ConfigMap holding the llama-swap Grafana dashboard, labelled
     # `grafana_dashboard: "1"` for the grafana-k8s-sidecar. The dashboard covers
     # all llamaswap_* metrics: GPU utilization, memory, temperature, power, fan,
-    # CPU, load average, system memory, swap, and network I/O.
+    # CPU, load average, system memory, swap, network I/O, and — when
+    # metrics.tokenExporter is enabled — per-model token counts, cache hits and
+    # prefill/generation throughput.
     enabled: false
     # -- Namespace the dashboard ConfigMap is created in. Empty uses the
     # release namespace.
@@ -366,26 +368,70 @@ metrics:
     # automatically when `folder` is set.
     annotations: {}
   tokenExporter:
-    # -- Run the prometheus-community/json_exporter as a sidecar to convert
-    # llama-swap's /api/metrics/stats (token counts, prompt/generation latency
-    # histograms) into Prometheus metrics. The ServiceMonitor scrapes the
-    # exporter's /probe endpoint, which in turn fetches the stats from
-    # llama-swap via localhost.
+    # -- Run the llama-token-metrics-exporter as a sidecar to export
+    # llama-swap's per-model token counts and inference throughput as
+    # Prometheus metrics. It polls /v1/models and each model's
+    # /api/metrics/stats in the background and serves the snapshot on its own
+    # /metrics, so a scrape never reaches llama-swap. The ServiceMonitor
+    # scrapes that endpoint on the port below. See
+    # https://github.com/hauke-cloud/llama-token-metrics-exporter.
     enabled: false
-    # -- Port the json_exporter listens on inside the container.
-    port: 7980
+    # -- Port the exporter listens on inside the container.
+    port: 9782
     image:
-      # -- json_exporter image repository.
-      repository: quay.io/prometheuscommunity/json-exporter
-      # -- json_exporter image tag.
-      tag: "v0.8.0"
+      # -- Exporter image repository.
+      repository: ghcr.io/hauke-cloud/llama-token-metrics-exporter
+      # -- Exporter image tag.
+      tag: "latest"
       # -- Image pull policy.
       pullPolicy: IfNotPresent
+    # -- URL of llama-swap as seen from the sidecar. Empty derives
+    # `http://127.0.0.1:<llamaSwap.port>`, which works in the shared pod
+    # network namespace.
+    llamaSwapUrl: ""
+    # -- Gap between polls of the llama-swap API.
+    pollInterval: 30s
+    # -- Timeout for a single API request.
+    requestTimeout: 10s
+    # -- Per-model statistics requests in flight at once.
+    concurrency: 4
+    # -- Also export the unlabelled aggregate across every model
+    # (llamaswap_activity_*).
+    includeTotals: true
+    # -- Which /v1/models entry types to collect: model, alias, peer, selector.
+    # Aliases and selectors resolve to another model before llama-swap writes
+    # its activity log, so their statistics stay zero.
+    modelTypes:
+      - model
+    # -- Log level: debug, info, warn, error.
+    logLevel: info
+    # -- Log format: text or json.
+    logFormat: json
+    # API key for llama-swap instances that declare `apiKeys`. Mount it from a
+    # Secret file so it stays out of the process environment and of
+    # `kubectl describe pod`.
+    apiKey:
+      # -- Name of the Secret holding the API key. Empty sends no key.
+      existingSecret: ""
+      # -- Key within that Secret.
+      key: api-key
+    # Liveness only, deliberately. A readinessProbe on any container gates the
+    # whole pod, so an exporter that could not reach llama-swap would pull
+    # llama-swap itself out of its Service. /healthz never depends on
+    # llama-swap, so this restarts the sidecar only if it is truly wedged.
+    # Scrape health lives in `up` and llamaswap_exporter_api_up.
+    # -- Liveness probe for the sidecar.
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: token-metrics
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 3
     # -- Resource requests and limits for the sidecar.
     resources:
       limits:
-        cpu: 100m
-        memory: 64Mi
+        memory: 128Mi
       requests:
         cpu: 10m
         memory: 32Mi

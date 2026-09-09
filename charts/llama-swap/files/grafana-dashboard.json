@@ -57,6 +57,19 @@
         "refresh": 2,
         "includeAll": true,
         "multi": true
+      },
+      {
+        "name": "model",
+        "label": "Model",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values(llamaswap_model_info{job=\"$job\", namespace=\"$namespace\"}, model)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true
       }
     ]
   },
@@ -196,7 +209,7 @@
       },
       "targets": [
         {
-          "expr": "llamaswap_total_requests{job=\"$job\", namespace=\"$namespace\"}",
+          "expr": "sum(llamaswap_activity_requests{job=\"$job\", namespace=\"$namespace\"})",
           "refId": "A"
         }
       ],
@@ -248,7 +261,7 @@
       },
       "targets": [
         {
-          "expr": "llamaswap_total_input_tokens{job=\"$job\", namespace=\"$namespace\"}",
+          "expr": "sum(llamaswap_activity_input_tokens{job=\"$job\", namespace=\"$namespace\"})",
           "refId": "A"
         }
       ],
@@ -300,7 +313,7 @@
       },
       "targets": [
         {
-          "expr": "llamaswap_total_output_tokens{job=\"$job\", namespace=\"$namespace\"}",
+          "expr": "sum(llamaswap_activity_output_tokens{job=\"$job\", namespace=\"$namespace\"})",
           "refId": "A"
         }
       ],
@@ -352,7 +365,7 @@
       },
       "targets": [
         {
-          "expr": "llamaswap_total_cache_tokens{job=\"$job\", namespace=\"$namespace\"}",
+          "expr": "sum(llamaswap_activity_cache_tokens{job=\"$job\", namespace=\"$namespace\"})",
           "refId": "A"
         }
       ],
@@ -1510,7 +1523,7 @@
     },
     {
       "id": 64,
-      "title": "Token Throughput",
+      "title": "Tokens per Model (activity window)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -1518,24 +1531,24 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 58
       },
       "targets": [
         {
-          "expr": "rate(llamaswap_total_input_tokens{job=\"$job\", namespace=\"$namespace\"}[$__rate_interval])",
-          "legendFormat": "input",
+          "expr": "llamaswap_model_activity_input_tokens{job=\"$job\", namespace=\"$namespace\", model=~\"$model\"}",
+          "legendFormat": "{{model}} input",
           "refId": "A"
         },
         {
-          "expr": "rate(llamaswap_total_output_tokens{job=\"$job\", namespace=\"$namespace\"}[$__rate_interval])",
-          "legendFormat": "output",
+          "expr": "llamaswap_model_activity_output_tokens{job=\"$job\", namespace=\"$namespace\", model=~\"$model\"}",
+          "legendFormat": "{{model}} output",
           "refId": "B"
         },
         {
-          "expr": "rate(llamaswap_total_cache_tokens{job=\"$job\", namespace=\"$namespace\"}[$__rate_interval])",
-          "legendFormat": "cache",
+          "expr": "llamaswap_model_activity_cache_tokens{job=\"$job\", namespace=\"$namespace\", model=~\"$model\"}",
+          "legendFormat": "{{model}} cache",
           "refId": "C"
         }
       ],
@@ -1558,7 +1571,7 @@
           "placement": "bottom",
           "calcs": [
             "mean",
-            "max"
+            "lastNotNull"
           ]
         },
         "tooltip": {
@@ -1568,9 +1581,60 @@
       }
     },
     {
-      "id": 70,
+      "id": 66,
+      "title": "Cache Hit Ratio",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 58
+      },
+      "targets": [
+        {
+          "expr": "sum(llamaswap_model_activity_cache_tokens{job=\"$job\", namespace=\"$namespace\", model=~\"$model\"}) / sum(llamaswap_model_activity_cache_tokens{job=\"$job\", namespace=\"$namespace\", model=~\"$model\"} + llamaswap_model_activity_input_tokens{job=\"$job\", namespace=\"$namespace\", model=~\"$model\"})",
+          "legendFormat": "cache hit",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 78,
       "type": "row",
-      "title": "Latency",
+      "title": "Tokens — Throughput",
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -1581,7 +1645,7 @@
     },
     {
       "id": 71,
-      "title": "Prompt Time (ms)",
+      "title": "Prompt (Prefill) Speed (tokens/s)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -1595,24 +1659,24 @@
       },
       "targets": [
         {
-          "expr": "llamaswap_prompt_time_ms_p50{job=\"$job\", namespace=\"$namespace\"}",
-          "legendFormat": "p50",
+          "expr": "llamaswap_model_prompt_speed_tokens_per_second{job=\"$job\", namespace=\"$namespace\", model=~\"$model\", quantile=\"0.5\"}",
+          "legendFormat": "{{model}} p50",
           "refId": "A"
         },
         {
-          "expr": "llamaswap_prompt_time_ms_p95{job=\"$job\", namespace=\"$namespace\"}",
-          "legendFormat": "p95",
+          "expr": "llamaswap_model_prompt_speed_tokens_per_second{job=\"$job\", namespace=\"$namespace\", model=~\"$model\", quantile=\"0.95\"}",
+          "legendFormat": "{{model}} p95",
           "refId": "B"
         },
         {
-          "expr": "llamaswap_prompt_time_ms_p99{job=\"$job\", namespace=\"$namespace\"}",
-          "legendFormat": "p99",
+          "expr": "llamaswap_model_prompt_speed_tokens_per_second{job=\"$job\", namespace=\"$namespace\", model=~\"$model\", quantile=\"0.99\"}",
+          "legendFormat": "{{model}} p99",
           "refId": "C"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ms",
+          "unit": "short",
           "custom": {
             "drawStyle": "line",
             "lineWidth": 2,
@@ -1621,26 +1685,7 @@
             "spanNulls": true
           }
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p50"
-            },
-            "properties": [
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dash",
-                  "dash": [
-                    5,
-                    5
-                  ]
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
         "legend": {
@@ -1659,7 +1704,7 @@
     },
     {
       "id": 72,
-      "title": "Generation Time (ms/token)",
+      "title": "Generation Speed (tokens/s)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -1673,24 +1718,24 @@
       },
       "targets": [
         {
-          "expr": "llamaswap_generation_time_ms_p50{job=\"$job\", namespace=\"$namespace\"}",
-          "legendFormat": "p50",
+          "expr": "llamaswap_model_generation_speed_tokens_per_second{job=\"$job\", namespace=\"$namespace\", model=~\"$model\", quantile=\"0.5\"}",
+          "legendFormat": "{{model}} p50",
           "refId": "A"
         },
         {
-          "expr": "llamaswap_generation_time_ms_p95{job=\"$job\", namespace=\"$namespace\"}",
-          "legendFormat": "p95",
+          "expr": "llamaswap_model_generation_speed_tokens_per_second{job=\"$job\", namespace=\"$namespace\", model=~\"$model\", quantile=\"0.95\"}",
+          "legendFormat": "{{model}} p95",
           "refId": "B"
         },
         {
-          "expr": "llamaswap_generation_time_ms_p99{job=\"$job\", namespace=\"$namespace\"}",
-          "legendFormat": "p99",
+          "expr": "llamaswap_model_generation_speed_tokens_per_second{job=\"$job\", namespace=\"$namespace\", model=~\"$model\", quantile=\"0.99\"}",
+          "legendFormat": "{{model}} p99",
           "refId": "C"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ms",
+          "unit": "short",
           "custom": {
             "drawStyle": "line",
             "lineWidth": 2,
@@ -1699,26 +1744,7 @@
             "spanNulls": true
           }
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p50"
-            },
-            "properties": [
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dash",
-                  "dash": [
-                    5,
-                    5
-                  ]
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
         "legend": {
@@ -1733,6 +1759,252 @@
           "mode": "multi",
           "sort": "desc"
         }
+      }
+    },
+    {
+      "id": 73,
+      "type": "row",
+      "title": "Models & Exporter",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 75
+      }
+    },
+    {
+      "id": 74,
+      "title": "Exporter API",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 76
+      },
+      "targets": [
+        {
+          "expr": "llamaswap_exporter_api_up{job=\"$job\", namespace=\"$namespace\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "down",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "up",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 75,
+      "title": "Models Discovered",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 76
+      },
+      "targets": [
+        {
+          "expr": "sum(llamaswap_exporter_models_discovered{job=\"$job\", namespace=\"$namespace\"})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 76,
+      "title": "Loaded Models",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 76
+      },
+      "targets": [
+        {
+          "expr": "sum(llamaswap_model_loaded{job=\"$job\", namespace=\"$namespace\", model=~\"$model\"})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 77,
+      "title": "Last Successful Poll (s ago)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 76
+      },
+      "targets": [
+        {
+          "expr": "time() - llamaswap_exporter_last_success_timestamp_seconds{job=\"$job\", namespace=\"$namespace\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 120
+              },
+              {
+                "color": "red",
+                "value": 600
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
       }
     }
   ]
