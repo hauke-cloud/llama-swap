@@ -15,5 +15,11 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
+    {{- if .Values.metrics.tokenExporter.enabled }}
+    - port: {{ .Values.metrics.tokenExporter.port }}
+      targetPort: token-metrics
+      protocol: TCP
+      name: token-metrics
+    {{- end }}
   selector:
     {{- include "llama-swap.selectorLabels" . | nindent 4 }}

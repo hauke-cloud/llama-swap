@@ -205,6 +205,11 @@ comfyui.name wins, so a hand-written one is never overwritten.
 {{- end -}}
 {{- end -}}
 {{- end -}}
+{{- if .Values.persistence.data.enabled -}}
+{{- $store := deepCopy (default (dict) (get $config "store")) -}}
+{{- $_ := set $store "path" (printf "%s/activity.sqlite" .Values.persistence.data.mountPath) -}}
+{{- $_ := set $config "store" $store -}}
+{{- end -}}
 {{- toYaml $config -}}
 {{- end }}
 

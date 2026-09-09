@@ -449,6 +449,11 @@ name; set `metrics.prometheusRule.rules` to replace them with your own.
 | llamaSwap.extraArgs | list | `[]` | Extra command line arguments for llama-swap. |
 | llamaSwap.port | int | `8080` | Port llama-swap listens on inside the container. |
 | llamaSwap.watchConfig | bool | `false` | Reload the configuration when the file changes (`--watch-config`). |
+| metrics.grafanaDashboard.annotations | object | `{}` | Extra annotations for the ConfigMap. The folder annotation is added automatically when `folder` is set. |
+| metrics.grafanaDashboard.enabled | bool | `false` | Create a ConfigMap holding the llama-swap Grafana dashboard, labelled `grafana_dashboard: "1"` for the grafana-k8s-sidecar. The dashboard covers all llamaswap_* metrics: GPU utilization, memory, temperature, power, fan, CPU, load average, system memory, swap, and network I/O. |
+| metrics.grafanaDashboard.folder | string | `""` | Grafana folder the sidecar imports the dashboard into. Requires the sidecar's folder feature to be enabled. |
+| metrics.grafanaDashboard.labels | object | `{}` | Extra labels for the ConfigMap. |
+| metrics.grafanaDashboard.namespace | string | `""` | Namespace the dashboard ConfigMap is created in. Empty uses the release namespace. |
 | metrics.prometheusRule.annotations | object | `{}` | Annotations for the PrometheusRule. |
 | metrics.prometheusRule.enabled | bool | `false` | Create a PrometheusRule with a default set of alerts. Requires the monitoring.coreos.com CRDs. |
 | metrics.prometheusRule.labels | object | `{}` | Extra labels for the PrometheusRule. |
@@ -460,6 +465,12 @@ name; set `metrics.prometheusRule.rules` to replace them with your own.
 | metrics.serviceMonitor.labels | object | `{}` | Extra labels for the ServiceMonitor. Prometheus instances commonly select on a label like `release: prometheus`, which belongs here. |
 | metrics.serviceMonitor.namespace | string | `""` | Namespace the ServiceMonitor is created in. Empty uses the release namespace. Prometheus often watches other namespaces, so point this at its own when the Service is scraped from a different one. |
 | metrics.serviceMonitor.scrapeTimeout | string | `"10s"` | Give up on a scrape after this long. |
+| metrics.tokenExporter.enabled | bool | `false` | Run the prometheus-community/json_exporter as a sidecar to convert llama-swap's /api/metrics/stats (token counts, prompt/generation latency histograms) into Prometheus metrics. The ServiceMonitor scrapes the exporter's /probe endpoint, which in turn fetches the stats from llama-swap via localhost. |
+| metrics.tokenExporter.image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
+| metrics.tokenExporter.image.repository | string | `"quay.io/prometheuscommunity/json-exporter"` | json_exporter image repository. |
+| metrics.tokenExporter.image.tag | string | `"v0.5.7"` | json_exporter image tag. |
+| metrics.tokenExporter.port | int | `7980` | Port the json_exporter listens on inside the container. |
+| metrics.tokenExporter.resources | object | `{"limits":{"cpu":"100m","memory":"64Mi"},"requests":{"cpu":"10m","memory":"32Mi"}}` | Resource requests and limits for the sidecar. |
 | nameOverride | string | `""` | Override the chart name portion of resource names. |
 | nodeSelector | object | `{}` | Node selector for pod scheduling. |
 | persistence.comfyui.accessModes | list | `["ReadWriteOnce"]` | Access modes. |

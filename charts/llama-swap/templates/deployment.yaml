@@ -126,6 +126,24 @@ spec:
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+        {{- if .Values.metrics.tokenExporter.enabled }}
+        - name: json-exporter
+          image: {{ .Values.metrics.tokenExporter.image.repository }}:{{ .Values.metrics.tokenExporter.image.tag }}
+          imagePullPolicy: {{ .Values.metrics.tokenExporter.image.pullPolicy }}
+          args:
+            - --config.file=/etc/json-exporter/config.yml
+            - --web.listen-address=:{{ .Values.metrics.tokenExporter.port }}
+          ports:
+            - name: token-metrics
+              containerPort: {{ .Values.metrics.tokenExporter.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.metrics.tokenExporter.resources | nindent 12 }}
+          volumeMounts:
+            - name: json-exporter-config
+              mountPath: /etc/json-exporter
+              readOnly: true
+        {{- end }}
       volumes:
         - name: config
           configMap:
@@ -165,6 +183,11 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: {{ .Values.shm.sizeLimit }}
+        {{- end }}
+        {{- if .Values.metrics.tokenExporter.enabled }}
+        - name: json-exporter-config
+          configMap:
+            name: {{ include "llama-swap.fullname" . }}-json-exporter
         {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}

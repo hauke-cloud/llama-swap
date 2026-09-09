@@ -1,0 +1,924 @@
+{
+  "title": "llama-swap",
+  "uid": "llama-swap",
+  "tags": ["llama-swap", "llm", "inference", "gpu"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "editable": true,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "label": "Job",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(llamaswap_gpu_util_percent, job)",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(llamaswap_gpu_util_percent{job=\"$job\"}, namespace)",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "name": "gpu",
+        "label": "GPU",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(llamaswap_gpu_util_percent{job=\"$job\", namespace=\"$namespace\"}, id)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true
+      },
+      {
+        "name": "price",
+        "label": "Price (€/kWh)",
+        "type": "custom",
+        "query": "0.20,0.25,0.30,0.35,0.40,0.45,0.50",
+        "current": { "text": "0.30", "value": "0.30" },
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "options": []
+      }
+    ]
+  },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "KPI",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "id": 8,
+      "title": "Energy (24h)",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(sum_over_time(llamaswap_gpu_power_draw_watts{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"}[24h])) * 30 / 3600 / 1000",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwh",
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "orange", "value": null }] },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 9,
+      "title": "Cost (24h)",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(sum_over_time(llamaswap_gpu_power_draw_watts{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"}[24h])) * 30 / 3600 / 1000 * $price",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }] },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 61,
+      "title": "Requests",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "targets": [
+        {
+          "expr": "llamaswap_total_requests{job=\"$job\", namespace=\"$namespace\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 62,
+      "title": "Input Tokens",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "targets": [
+        {
+          "expr": "llamaswap_total_input_tokens{job=\"$job\", namespace=\"$namespace\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 63,
+      "title": "Output Tokens",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "targets": [
+        {
+          "expr": "llamaswap_total_output_tokens{job=\"$job\", namespace=\"$namespace\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 65,
+      "title": "Cache Tokens",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "targets": [
+        {
+          "expr": "llamaswap_total_cache_tokens{job=\"$job\", namespace=\"$namespace\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": null }] },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+
+    {
+      "id": 2,
+      "type": "row",
+      "title": "Overview",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }
+    },
+    {
+      "id": 3,
+      "title": "GPU Util",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 6 },
+      "targets": [
+        { "expr": "avg(llamaswap_gpu_util_percent{job=\"$job\", namespace=\"$namespace\"})", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "GPU Memory",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 6 },
+      "targets": [
+        { "expr": "sum(llamaswap_gpu_memory_used_bytes{job=\"$job\", namespace=\"$namespace\"}) / 1024^3", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decgbytes",
+          "decimals": 1,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "title": "CPU Util",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 6 },
+      "targets": [
+        { "expr": "avg(llamaswap_cpu_util_percent{job=\"$job\", namespace=\"$namespace\"})", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 60 }, { "color": "red", "value": 85 }]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "title": "System Memory",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 6 },
+      "targets": [
+        { "expr": "llamaswap_memory_used_bytes{job=\"$job\", namespace=\"$namespace\"} / 1024^3", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decgbytes",
+          "decimals": 1,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "title": "Load Avg (1m)",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 6 },
+      "targets": [
+        { "expr": "llamaswap_load_average{job=\"$job\", namespace=\"$namespace\", interval=\"1m\"}", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 4 }, { "color": "red", "value": 8 }]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 70,
+      "title": "Network I/O",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 6 },
+      "targets": [
+        { "expr": "rate(llamaswap_network_bytes_total{job=\"$job\", namespace=\"$namespace\"}[$__rate_interval]) * 8 / 1000000", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbits",
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": null }] },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+
+    {
+      "id": 10,
+      "type": "row",
+      "title": "GPU",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 10 }
+    },
+    {
+      "id": 11,
+      "title": "GPU Utilization",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 11 },
+      "targets": [
+        {
+          "expr": "llamaswap_gpu_util_percent{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"}",
+          "legendFormat": "GPU {{id}} — {{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 12,
+      "title": "GPU Memory",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 11 },
+      "targets": [
+        {
+          "expr": "llamaswap_gpu_memory_used_bytes{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"} / 1024^3",
+          "legendFormat": "GPU {{id}} used",
+          "refId": "A"
+        },
+        {
+          "expr": "llamaswap_gpu_memory_total_bytes{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"} / 1024^3",
+          "legendFormat": "GPU {{id}} total",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decgbytes",
+          "decimals": 1,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "total" },
+            "properties": [
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+
+    {
+      "id": 20,
+      "type": "row",
+      "title": "GPU — Thermal & Power",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 19 }
+    },
+    {
+      "id": 21,
+      "title": "GPU Temperature",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 20 },
+      "targets": [
+        {
+          "expr": "llamaswap_gpu_temperature_celsius{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"}",
+          "legendFormat": "GPU {{id}} core",
+          "refId": "A"
+        },
+        {
+          "expr": "llamaswap_gpu_vram_temperature_celsius{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"}",
+          "legendFormat": "GPU {{id}} VRAM",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 5, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 22,
+      "title": "GPU Power Draw",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 20 },
+      "targets": [
+        {
+          "expr": "llamaswap_gpu_power_draw_watts{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"}",
+          "legendFormat": "GPU {{id}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "decimals": 1,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 23,
+      "title": "GPU Fan Speed",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 20 },
+      "targets": [
+        {
+          "expr": "llamaswap_gpu_fan_speed_percent{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"}",
+          "legendFormat": "GPU {{id}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+
+    {
+      "id": 30,
+      "type": "row",
+      "title": "System",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 }
+    },
+    {
+      "id": 31,
+      "title": "CPU Utilization",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 29 },
+      "targets": [
+        { "expr": "avg(llamaswap_cpu_util_percent{job=\"$job\", namespace=\"$namespace\"})", "legendFormat": "average", "refId": "A" },
+        { "expr": "max(llamaswap_cpu_util_percent{job=\"$job\", namespace=\"$namespace\"})", "legendFormat": "max core", "refId": "B" },
+        { "expr": "min(llamaswap_cpu_util_percent{job=\"$job\", namespace=\"$namespace\"})", "legendFormat": "min core", "refId": "C" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "min core" },
+            "properties": [
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [5, 5] } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 32,
+      "title": "Load Average",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 29 },
+      "targets": [
+        { "expr": "llamaswap_load_average{job=\"$job\", namespace=\"$namespace\", interval=\"1m\"}", "legendFormat": "1m", "refId": "A" },
+        { "expr": "llamaswap_load_average{job=\"$job\", namespace=\"$namespace\", interval=\"5m\"}", "legendFormat": "5m", "refId": "B" },
+        { "expr": "llamaswap_load_average{job=\"$job\", namespace=\"$namespace\", interval=\"15m\"}", "legendFormat": "15m", "refId": "C" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 5, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+
+    {
+      "id": 40,
+      "type": "row",
+      "title": "System — Memory & Network",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 37 }
+    },
+    {
+      "id": 41,
+      "title": "Memory",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 38 },
+      "targets": [
+        { "expr": "llamaswap_memory_used_bytes{job=\"$job\", namespace=\"$namespace\"} / 1024^3", "legendFormat": "used", "refId": "A" },
+        { "expr": "llamaswap_memory_free_bytes{job=\"$job\", namespace=\"$namespace\"} / 1024^3", "legendFormat": "free", "refId": "B" },
+        { "expr": "llamaswap_memory_total_bytes{job=\"$job\", namespace=\"$namespace\"} / 1024^3", "legendFormat": "total", "refId": "C" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decgbytes",
+          "decimals": 1,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "total" },
+            "properties": [
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }
+            ]
+          },
+          { "matcher": { "id": "byName", "options": "free" }, "properties": [{ "id": "custom.lineWidth", "value": 1 }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 42,
+      "title": "Swap",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 38 },
+      "targets": [
+        { "expr": "llamaswap_swap_used_bytes{job=\"$job\", namespace=\"$namespace\"} / 1024^3", "legendFormat": "used", "refId": "A" },
+        { "expr": "llamaswap_swap_total_bytes{job=\"$job\", namespace=\"$namespace\"} / 1024^3", "legendFormat": "total", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decgbytes",
+          "decimals": 1,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "total" },
+            "properties": [
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 43,
+      "title": "Network I/O",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 38 },
+      "targets": [
+        {
+          "expr": "rate(llamaswap_network_bytes_total{job=\"$job\", namespace=\"$namespace\", direction=\"recv\"}[$__rate_interval])",
+          "legendFormat": "recv — {{interface}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(llamaswap_network_bytes_total{job=\"$job\", namespace=\"$namespace\", direction=\"sent\"}[$__rate_interval])",
+          "legendFormat": "sent — {{interface}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+
+    {
+      "id": 50,
+      "type": "row",
+      "title": "CPU Detail",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 46 }
+    },
+    {
+      "id": 51,
+      "title": "Per-Core CPU Utilization",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 47 },
+      "targets": [
+        {
+          "expr": "llamaswap_cpu_util_percent{job=\"$job\", namespace=\"$namespace\"}",
+          "legendFormat": "core {{core}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+
+    {
+      "id": 60,
+      "type": "row",
+      "title": "Tokens",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 57 }
+    },
+    {
+      "id": 64,
+      "title": "Token Throughput",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 58 },
+      "targets": [
+        {
+          "expr": "rate(llamaswap_total_input_tokens{job=\"$job\", namespace=\"$namespace\"}[$__rate_interval])",
+          "legendFormat": "input",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(llamaswap_total_output_tokens{job=\"$job\", namespace=\"$namespace\"}[$__rate_interval])",
+          "legendFormat": "output",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(llamaswap_total_cache_tokens{job=\"$job\", namespace=\"$namespace\"}[$__rate_interval])",
+          "legendFormat": "cache",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+
+    {
+      "id": 70,
+      "type": "row",
+      "title": "Latency",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 66 }
+    },
+    {
+      "id": 71,
+      "title": "Prompt Time (ms)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 67 },
+      "targets": [
+        {
+          "expr": "llamaswap_prompt_time_ms_p50{job=\"$job\", namespace=\"$namespace\"}",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "llamaswap_prompt_time_ms_p95{job=\"$job\", namespace=\"$namespace\"}",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "llamaswap_prompt_time_ms_p99{job=\"$job\", namespace=\"$namespace\"}",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 5, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "p50" },
+            "properties": [{ "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [5, 5] } }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 72,
+      "title": "Generation Time (ms/token)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 67 },
+      "targets": [
+        {
+          "expr": "llamaswap_generation_time_ms_p50{job=\"$job\", namespace=\"$namespace\"}",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "llamaswap_generation_time_ms_p95{job=\"$job\", namespace=\"$namespace\"}",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "llamaswap_generation_time_ms_p99{job=\"$job\", namespace=\"$namespace\"}",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 5, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "p50" },
+            "properties": [{ "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [5, 5] } }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    }
+  ]
+}

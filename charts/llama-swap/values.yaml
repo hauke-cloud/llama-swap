@@ -348,6 +348,47 @@ metrics:
     # `service` label the Prometheus Operator derives from this chart's
     # Service, so they work regardless of the scrape's job name.
     rules: []
+  grafanaDashboard:
+    # -- Create a ConfigMap holding the llama-swap Grafana dashboard, labelled
+    # `grafana_dashboard: "1"` for the grafana-k8s-sidecar. The dashboard covers
+    # all llamaswap_* metrics: GPU utilization, memory, temperature, power, fan,
+    # CPU, load average, system memory, swap, and network I/O.
+    enabled: false
+    # -- Namespace the dashboard ConfigMap is created in. Empty uses the
+    # release namespace.
+    namespace: ""
+    # -- Grafana folder the sidecar imports the dashboard into. Requires the
+    # sidecar's folder feature to be enabled.
+    folder: ""
+    # -- Extra labels for the ConfigMap.
+    labels: {}
+    # -- Extra annotations for the ConfigMap. The folder annotation is added
+    # automatically when `folder` is set.
+    annotations: {}
+  tokenExporter:
+    # -- Run the prometheus-community/json_exporter as a sidecar to convert
+    # llama-swap's /api/metrics/stats (token counts, prompt/generation latency
+    # histograms) into Prometheus metrics. The ServiceMonitor scrapes the
+    # exporter's /probe endpoint, which in turn fetches the stats from
+    # llama-swap via localhost.
+    enabled: false
+    # -- Port the json_exporter listens on inside the container.
+    port: 7980
+    image:
+      # -- json_exporter image repository.
+      repository: quay.io/prometheuscommunity/json-exporter
+      # -- json_exporter image tag.
+      tag: "v0.5.7"
+      # -- Image pull policy.
+      pullPolicy: IfNotPresent
+    # -- Resource requests and limits for the sidecar.
+    resources:
+      limits:
+        cpu: 100m
+        memory: 64Mi
+      requests:
+        cpu: 10m
+        memory: 32Mi
 
 ingress:
   # -- Expose llama-swap through an Ingress.

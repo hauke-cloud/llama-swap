@@ -1,0 +1,11 @@
+{{- if .Values.metrics.tokenExporter.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "llama-swap.fullname" . }}-json-exporter
+  labels:
+    {{- include "llama-swap.labels" . | nindent 4 }}
+data:
+  config.yml: |
+{{ .Files.Get "files/json-exporter-config.yml" | indent 4 }}
+{{- end }}
