@@ -378,7 +378,7 @@ metrics:
       # -- json_exporter image repository.
       repository: quay.io/prometheuscommunity/json-exporter
       # -- json_exporter image tag.
-      tag: "v0.5.7"
+      tag: "v0.8.0"
       # -- Image pull policy.
       pullPolicy: IfNotPresent
     # -- Resource requests and limits for the sidecar.
