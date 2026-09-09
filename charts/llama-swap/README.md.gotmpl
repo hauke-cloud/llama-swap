@@ -356,6 +356,29 @@ model loading happens lazily per request and does not affect readiness. The exce
 probe allows 5 minutes by default. Raise `startupProbe.failureThreshold` if you preload
 something large from slow storage.
 
+## Monitoring
+
+llama-swap exposes its performance metrics (CPU, RAM, network, GPU) at `/metrics`
+in Prometheus format, on the same port as the API. Two values wire it into a
+Prometheus Operator cluster:
+
+```yaml
+metrics:
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: prometheus
+  prometheusRule:
+    enabled: true
+```
+
+The ServiceMonitor needs labels your Prometheus instance selects on —
+`release: prometheus` is the common case — and a `namespace` pointing at the one
+your instance watches, if that is not the release namespace. The default alert
+rules (`up`, GPU memory, GPU temperature) match on the `service` label the
+Operator derives from the Service, so they do not depend on the scrape's job
+name; set `metrics.prometheusRule.rules` to replace them with your own.
+
 {{ template "chart.requirementsSection" . }}
 
 {{ template "chart.valuesSection" . }}

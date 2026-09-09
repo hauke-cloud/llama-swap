@@ -314,6 +314,41 @@ service:
   # -- Annotations to add to the Service.
   annotations: {}
 
+# /metrics exposes llama-swap's performance metrics (CPU, RAM, network, GPU)
+# in Prometheus format on the same port as everything else. Both resources
+# below use the Prometheus Operator CRDs and are off by default.
+metrics:
+  serviceMonitor:
+    # -- Create a ServiceMonitor scraping /metrics. Requires the monitoring.coreos.com CRDs.
+    enabled: false
+    # -- Namespace the ServiceMonitor is created in. Empty uses the release
+    # namespace. Prometheus often watches other namespaces, so point this at
+    # its own when the Service is scraped from a different one.
+    namespace: ""
+    # -- How often Prometheus scrapes /metrics.
+    interval: 30s
+    # -- Give up on a scrape after this long.
+    scrapeTimeout: 10s
+    # -- Extra labels for the ServiceMonitor. Prometheus instances commonly
+    # select on a label like `release: prometheus`, which belongs here.
+    labels: {}
+    # -- Annotations for the ServiceMonitor.
+    annotations: {}
+  prometheusRule:
+    # -- Create a PrometheusRule with a default set of alerts. Requires the monitoring.coreos.com CRDs.
+    enabled: false
+    # -- Namespace the PrometheusRule is created in. Empty uses the release
+    # namespace.
+    namespace: ""
+    # -- Extra labels for the PrometheusRule.
+    labels: {}
+    # -- Annotations for the PrometheusRule.
+    annotations: {}
+    # -- Alerting rules. Empty uses the chart's defaults, which match on the
+    # `service` label the Prometheus Operator derives from this chart's
+    # Service, so they work regardless of the scrape's job name.
+    rules: []
+
 ingress:
   # -- Expose llama-swap through an Ingress.
   enabled: false

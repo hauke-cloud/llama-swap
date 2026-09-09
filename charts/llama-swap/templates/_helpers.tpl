@@ -285,6 +285,40 @@ Fail early on value combinations that produce a broken release.
 {{- end }}
 
 {{/*
+Default PrometheusRule alerts. They match on the `service` label the Prometheus
+Operator sets from this chart's Service, so they keep working no matter what
+job name the scrape ends up with. The GPU alerts read the metrics llama-swap
+exposes at /metrics; without a GPU they simply never fire.
+*/}}
+{{- define "llama-swap.defaultPrometheusRules" -}}
+{{- $service := printf "%s/%s" .Release.Namespace (include "llama-swap.fullname" .) -}}
+- alert: LlamaSwapDown
+  expr: up{service="{{ $service }}"} == 0
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: llama-swap {{ `{{` }}$labels.service{{ `}}` }} is down
+    description: Prometheus has not been able to scrape llama-swap at {{ $service }} for 5 minutes.
+- alert: LlamaSwapGpuMemoryHigh
+  expr: llamaswap_gpu_memory_util_percent > 90
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: GPU memory on llama-swap {{ `{{` }}$labels.instance{{ `}}` }} is above 90%
+    description: '{{ `{{` }}$labels.name{{ `}}` }} has held {{ `{{` }}printf "%.1f" $value{{ `}}` }}% of its GPU memory for 10 minutes. A model swap or a smaller model will free it.'
+- alert: LlamaSwapGpuTemperatureHigh
+  expr: llamaswap_gpu_temperature_celsius > 85
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: GPU temperature on llama-swap {{ `{{` }}$labels.instance{{ `}}` }} is above 85°C
+    description: '{{ `{{` }}$labels.name{{ `}}` }} has run at {{ `{{` }}printf "%.1f" $value{{ `}}` }}°C for 10 minutes.'
+{{- end }}
+
+{{/*
 Rules for an HTTPRoute. Takes a dict of `context` (the root scope) and `route`
 (one of the `httpRoute` value blocks). Every rule in `route.rules` gets this
 chart's Service filled in as its backend and `route.timeouts` applied, unless

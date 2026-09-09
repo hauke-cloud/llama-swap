@@ -356,6 +356,29 @@ model loading happens lazily per request and does not affect readiness. The exce
 probe allows 5 minutes by default. Raise `startupProbe.failureThreshold` if you preload
 something large from slow storage.
 
+## Monitoring
+
+llama-swap exposes its performance metrics (CPU, RAM, network, GPU) at `/metrics`
+in Prometheus format, on the same port as the API. Two values wire it into a
+Prometheus Operator cluster:
+
+```yaml
+metrics:
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: prometheus
+  prometheusRule:
+    enabled: true
+```
+
+The ServiceMonitor needs labels your Prometheus instance selects on —
+`release: prometheus` is the common case — and a `namespace` pointing at the one
+your instance watches, if that is not the release namespace. The default alert
+rules (`up`, GPU memory, GPU temperature) match on the `service` label the
+Operator derives from the Service, so they do not depend on the scrape's job
+name; set `metrics.prometheusRule.rules` to replace them with your own.
+
 ## Values
 
 | Key | Type | Default | Description |
@@ -426,6 +449,17 @@ something large from slow storage.
 | llamaSwap.extraArgs | list | `[]` | Extra command line arguments for llama-swap. |
 | llamaSwap.port | int | `8080` | Port llama-swap listens on inside the container. |
 | llamaSwap.watchConfig | bool | `false` | Reload the configuration when the file changes (`--watch-config`). |
+| metrics.prometheusRule.annotations | object | `{}` | Annotations for the PrometheusRule. |
+| metrics.prometheusRule.enabled | bool | `false` | Create a PrometheusRule with a default set of alerts. Requires the monitoring.coreos.com CRDs. |
+| metrics.prometheusRule.labels | object | `{}` | Extra labels for the PrometheusRule. |
+| metrics.prometheusRule.namespace | string | `""` | Namespace the PrometheusRule is created in. Empty uses the release namespace. |
+| metrics.prometheusRule.rules | list | `[]` | Alerting rules. Empty uses the chart's defaults, which match on the `service` label the Prometheus Operator derives from this chart's Service, so they work regardless of the scrape's job name. |
+| metrics.serviceMonitor.annotations | object | `{}` | Annotations for the ServiceMonitor. |
+| metrics.serviceMonitor.enabled | bool | `false` | Create a ServiceMonitor scraping /metrics. Requires the monitoring.coreos.com CRDs. |
+| metrics.serviceMonitor.interval | string | `"30s"` | How often Prometheus scrapes /metrics. |
+| metrics.serviceMonitor.labels | object | `{}` | Extra labels for the ServiceMonitor. Prometheus instances commonly select on a label like `release: prometheus`, which belongs here. |
+| metrics.serviceMonitor.namespace | string | `""` | Namespace the ServiceMonitor is created in. Empty uses the release namespace. Prometheus often watches other namespaces, so point this at its own when the Service is scraped from a different one. |
+| metrics.serviceMonitor.scrapeTimeout | string | `"10s"` | Give up on a scrape after this long. |
 | nameOverride | string | `""` | Override the chart name portion of resource names. |
 | nodeSelector | object | `{}` | Node selector for pod scheduling. |
 | persistence.comfyui.accessModes | list | `["ReadWriteOnce"]` | Access modes. |
