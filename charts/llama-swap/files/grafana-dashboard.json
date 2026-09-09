@@ -6,6 +6,7 @@
   "schemaVersion": 39,
   "editable": true,
   "refresh": "30s",
+  "autoRefresh": "30s",
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "templating": {
