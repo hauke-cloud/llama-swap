@@ -70,6 +70,20 @@
         "refresh": 2,
         "includeAll": true,
         "multi": true
+      },
+      {
+        "name": "day_of_month",
+        "label": "Day of Month",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "day_of_month(vector(time()))",
+        "refresh": 2,
+        "hide": 2,
+        "includeAll": false,
+        "multi": false
       }
     ]
   },
@@ -402,6 +416,122 @@
       }
     },
     {
+      "id": 80,
+      "type": "row",
+      "title": "KPI — Energy & Cost (month)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      }
+    },
+    {
+      "id": 81,
+      "title": "Energy (month)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
+          "expr": "sum(sum_over_time(llamaswap_gpu_power_draw_watts{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"}[${day_of_month}d:1h])) * 3600 / 3600 / 1000",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwh",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 82,
+      "title": "Cost (month)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 6
+      },
+      "targets": [
+        {
+          "expr": "sum(sum_over_time((llamaswap_gpu_power_draw_watts{job=\"$job\", namespace=\"$namespace\", id=~\"$gpu\"} * scalar(sum(tibber_price_current_total) or vector(0)))[${day_of_month}d:1h])) * 3600 / 3600 / 1000",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
       "id": 2,
       "type": "row",
       "title": "Overview",
@@ -410,7 +540,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 10
       }
     },
     {
@@ -425,7 +555,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 6
+        "y": 11
       },
       "targets": [
         {
@@ -485,7 +615,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 6
+        "y": 11
       },
       "targets": [
         {
@@ -537,7 +667,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 6
+        "y": 11
       },
       "targets": [
         {
@@ -597,7 +727,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 6
+        "y": 11
       },
       "targets": [
         {
@@ -649,7 +779,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 6
+        "y": 11
       },
       "targets": [
         {
@@ -709,7 +839,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 6
+        "y": 11
       },
       "targets": [
         {
@@ -758,7 +888,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 10
+        "y": 15
       }
     },
     {
@@ -773,7 +903,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 11
+        "y": 16
       },
       "targets": [
         {
@@ -824,7 +954,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 11
+        "y": 16
       },
       "targets": [
         {
@@ -898,7 +1028,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 19
+        "y": 24
       }
     },
     {
@@ -913,7 +1043,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 20
+        "y": 25
       },
       "targets": [
         {
@@ -964,7 +1094,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 20
+        "y": 25
       },
       "targets": [
         {
@@ -1014,7 +1144,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 20
+        "y": 25
       },
       "targets": [
         {
@@ -1062,7 +1192,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 33
       }
     },
     {
@@ -1077,7 +1207,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 29
+        "y": 34
       },
       "targets": [
         {
@@ -1161,7 +1291,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 29
+        "y": 34
       },
       "targets": [
         {
@@ -1218,7 +1348,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 42
       }
     },
     {
@@ -1233,7 +1363,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 38
+        "y": 43
       },
       "targets": [
         {
@@ -1327,7 +1457,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 38
+        "y": 43
       },
       "targets": [
         {
@@ -1404,7 +1534,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 38
+        "y": 43
       },
       "targets": [
         {
@@ -1455,7 +1585,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 46
+        "y": 51
       }
     },
     {
@@ -1470,7 +1600,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 52
       },
       "targets": [
         {
@@ -1518,7 +1648,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 62
       }
     },
     {
@@ -1533,7 +1663,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 58
+        "y": 63
       },
       "targets": [
         {
@@ -1592,7 +1722,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 58
+        "y": 63
       },
       "targets": [
         {
@@ -1640,7 +1770,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 71
       }
     },
     {
@@ -1655,7 +1785,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 67
+        "y": 72
       },
       "targets": [
         {
@@ -1714,7 +1844,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 67
+        "y": 72
       },
       "targets": [
         {
@@ -1770,7 +1900,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 75
+        "y": 80
       }
     },
     {
@@ -1785,7 +1915,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 76
+        "y": 81
       },
       "targets": [
         {
@@ -1855,7 +1985,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 76
+        "y": 81
       },
       "targets": [
         {
@@ -1907,7 +2037,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 76
+        "y": 81
       },
       "targets": [
         {
@@ -1959,7 +2089,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 76
+        "y": 81
       },
       "targets": [
         {
