@@ -79,7 +79,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "query": "day_of_month(vector(time()))",
+        "query": "query_result(scalar(day_of_month(vector(time()))))",
         "refresh": 2,
         "hide": 2,
         "includeAll": false,
